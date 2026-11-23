@@ -1,39 +1,35 @@
-use prometheus::{Encoder, GaugeVec, HistogramOpts, HistogramVec, IntCounterVec, Opts, Registry, TextEncoder};
+use prometheus::{
+    register_gauge_vec_with_registry as gauge, register_histogram_vec_with_registry as histogram,
+    register_int_counter_vec_with_registry as counter, Encoder, GaugeVec, HistogramVec, IntCounterVec, Registry,
+    TextEncoder,
+};
 
-/// The `board_source_*` metrics, labelled by source.
+/// The `board_source_*` metrics, labelled by source, and the HTTP ones.
 pub struct Metrics {
     registry: Registry,
     reads: IntCounterVec,
     errors: IntCounterVec,
     duration: HistogramVec,
     age: GaugeVec,
+    requests: IntCounterVec,
+    request_duration: HistogramVec,
 }
 
 impl Default for Metrics {
     fn default() -> Self {
-        let l = &["source"];
-        let reads = IntCounterVec::new(Opts::new("board_source_reads_total", "Reads of each source."), l).unwrap();
-        let errors =
-            IntCounterVec::new(Opts::new("board_source_read_errors_total", "Reads of each source that failed."), l)
-                .unwrap();
-        let duration = HistogramVec::new(
-            HistogramOpts::new("board_source_read_duration_seconds", "How long each source read took, retry included.")
-                .buckets(vec![0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 40.0]),
-            l,
-        )
-        .unwrap();
-        let age = GaugeVec::new(Opts::new("board_source_age_seconds", "Seconds since the source's last good read."), l)
-            .unwrap();
-        let registry = Registry::new();
-        for c in [
-            Box::new(reads.clone()) as Box<dyn prometheus::core::Collector>,
-            Box::new(errors.clone()),
-            Box::new(duration.clone()),
-            Box::new(age.clone()),
-        ] {
-            registry.register(c).unwrap();
+        let r = Registry::new();
+        let s = &["source"];
+        let buckets = vec![0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 40.0];
+        Self {
+            reads: counter!("board_source_reads_total", "Reads of each source.", s, r).unwrap(),
+            errors: counter!("board_source_read_errors_total", "Reads of each source that failed.", s, r).unwrap(),
+            duration: histogram!("board_source_read_duration_seconds", "Read time, retry included.", s, buckets, r)
+                .unwrap(),
+            age: gauge!("board_source_age_seconds", "Seconds since the source's last good read.", s, r).unwrap(),
+            requests: counter!("board_http_requests_total", "HTTP requests.", &["route", "status"], r).unwrap(),
+            request_duration: histogram!("board_http_request_duration_seconds", "HTTP time.", &["route"], r).unwrap(),
+            registry: r,
         }
-        Self { registry, reads, errors, duration, age }
     }
 }
 
@@ -46,6 +42,11 @@ impl Metrics {
             errors.inc();
         }
         self.duration.with_label_values(&[source]).observe(secs);
+    }
+
+    pub fn request(&self, route: &str, status: u16, secs: f64) {
+        self.requests.with_label_values(&[route, &status.to_string()]).inc();
+        self.request_duration.with_label_values(&[route]).observe(secs);
     }
 
     pub fn render(&self, ages: &[(&str, f64)]) -> String {

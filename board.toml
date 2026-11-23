@@ -1,12 +1,5 @@
-# The repos the board covers, with the tracker from each one's .sdlc/config.json.
-listen = "0.0.0.0:8080"
-
 [[repos]]
 name = "bbooth/booking"
 linear_team = "TRU"
 linear_project = "Booking"
 
-[[repos]]
-name = "bbooth/sdlc-board"
-linear_team = "TRU"
-linear_project = "SDLC board"

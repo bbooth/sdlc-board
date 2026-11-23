@@ -55,9 +55,7 @@ impl eframe::App for BoardApp {
             });
         });
         egui::CentralPanel::default().show(ui, |ui| match &latest {
-            None => {
-                ui.label(format!("Loading from {}…", self.url));
-            }
+            None => drop(ui.label(format!("Loading from {}…", self.url))),
             Some(Err(e)) => {
                 ui.colored_label(
                     ui.visuals().error_fg_color,
@@ -90,11 +88,17 @@ fn card(ui: &mut egui::Ui, t: &Ticket) {
         ui.hyperlink_to(egui::RichText::new(&t.id).strong(), &t.url);
         ui.label(&t.title);
         ui.small(&t.repo);
-        for c in &t.children {
-            ui.horizontal_wrapped(|ui| {
-                ui.hyperlink_to(&c.id, &c.url);
-                ui.small(format!("· {}", c.stage));
-            });
-        }
+        children(ui, t, 0);
     });
+}
+
+fn children(ui: &mut egui::Ui, t: &Ticket, depth: usize) {
+    for c in &t.children {
+        ui.horizontal_wrapped(|ui| {
+            ui.add_space(12.0 * depth as f32);
+            ui.hyperlink_to(&c.id, &c.url);
+            ui.small(format!("· {}", c.stage));
+        });
+        children(ui, c, depth + 1);
+    }
 }

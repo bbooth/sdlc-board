@@ -9,7 +9,7 @@ const STAGE_GROUP: &str = "Stage";
 const MAX_PAGES: usize = 10;
 
 const QUERY: &str = r#"query Board($team: String!, $project: String!, $after: String) {
-  issues(first: 100, after: $after, filter: {team: {key: {eq: $team}}, project: {name: {eq: $project}}}) {
+  issues(first: 100, after: $after, filter: {team: {key: {eq: $team}}, project: {name: {eq: $project}}, state: {type: {nin: ["completed", "canceled"]}}}) {
     pageInfo { hasNextPage endCursor }
     nodes { identifier title url state { type } parent { identifier } labels { nodes { name parent { name } } } }
   }
@@ -46,7 +46,9 @@ impl Linear {
                     .map_err(|e| anyhow::anyhow!("Linear issues for {}: {e}", repo.linear_project))?
                     .error_for_status()
                     .map_err(|e| anyhow::anyhow!("Linear issues for {}: {e}", repo.linear_project))?;
-                let page = parse_page(&resp.text().await?, &repo.name)?;
+                let body =
+                    resp.text().await.map_err(|e| anyhow::anyhow!("Linear issues for {}: {e}", repo.linear_project))?;
+                let page = parse_page(&body, &repo.name)?;
                 out.extend(page.issues);
                 match page.next {
                     Some(c) => after = Some(c),

@@ -15,5 +15,3 @@ web, to one person, and no client may hold a Linear or GitHub token.
 - Access is Cloudflare Access (a browser login, or a service token from the
   native and Android builds), and the server checks Access's signed header
   itself, so a request that skips Access gets nothing.
-- Each source keeps its last good data, so one failing source goes stale
-  instead of blanking the board; `board_source_*` metrics show freshness.

@@ -37,7 +37,6 @@ async fn open_tickets_land_once_in_their_stage_with_sub_tickets_nested() {
     };
     assert_eq!(ids("Outcome"), ["TRU-5"]);
     assert_eq!(ids("Ready for approval"), ["TRU-8"]);
-    // No Stage label yet: it hasn't entered the pipeline.
     assert_eq!(ids("Intake"), ["TRU-4"]);
     // Sub-tickets sit under their parent, each with its own stage, not in a column.
     assert!(ids("Rollout").is_empty() && ids("Build").is_empty());

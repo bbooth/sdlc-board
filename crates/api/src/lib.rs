@@ -4,18 +4,10 @@
 use serde::{Deserialize, Serialize};
 
 /// The pipeline's stages in board order, as named by the Stage label group.
+#[rustfmt::skip]
 pub const STAGES: [&str; 11] = [
-    "Intake",
-    "Spec",
-    "Ready for approval",
-    "Plan",
-    "Build",
-    "Verify",
-    "Adversarial review",
-    "PR review",
-    "Rollout",
-    "Outcome",
-    "Blocked",
+    "Intake", "Spec", "Ready for approval", "Plan", "Build", "Verify",
+    "Adversarial review", "PR review", "Rollout", "Outcome", "Blocked",
 ];
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

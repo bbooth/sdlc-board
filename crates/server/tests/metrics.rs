@@ -48,7 +48,11 @@ async fn reads_errors_duration_and_age_are_exported_per_source() {
     assert!(value(&text, "board_source_age_seconds", "linear") < 5.0);
 
     // The snapshot reports the failure too.
-    let snap: board_api::Snapshot = serde_json::from_str(&get(state, "/v1/snapshot").await).unwrap();
+    let snap: board_api::Snapshot = serde_json::from_str(&get(state.clone(), "/v1/snapshot").await).unwrap();
     let gh = snap.sources.iter().find(|s| s.name == "github").unwrap();
     assert!(gh.last_good.is_none() && gh.last_error.as_deref().unwrap().contains("unreachable"));
+
+    // Requests are counted by route.
+    let text = get(state, "/metrics").await;
+    assert!(text.contains(r#"board_http_requests_total{route="/v1/snapshot",status="200"} 1"#), "{text}");
 }

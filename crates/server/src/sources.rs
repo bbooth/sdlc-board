@@ -79,7 +79,10 @@ pub async fn refresh<S: Source>(state: &State, source: &S) {
     let started = Instant::now();
     let result = match source.read().await {
         Ok(v) => Ok(v),
-        Err(_) => source.read().await,
+        Err(e) => {
+            tracing::warn!(source = name, error = %e, "source read failed, retrying");
+            source.read().await
+        }
     };
     let secs = started.elapsed().as_secs_f64();
     state.metrics.observe(name, secs, result.is_ok());
