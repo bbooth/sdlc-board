@@ -1,0 +1,27 @@
+{
+  "$comment": "What the pipeline's gates know about this repo. Patterns are regular expressions matched against repo-relative paths. Written at onboarding, before any code: the crate paths are the planned layout, not findings.",
+  "tracker": { "kind": "linear", "team": "TruLinc", "key": "TRU", "project": "SDLC board" },
+  "branchPrefixes": ["feat/", "fix/", "docs/", "infra/", "ci/"],
+  "statusFile": "docs/STATUS.md",
+  "generated": { "paths": [], "regenerate": "" },
+  "unreviewed": ["Cargo\\.lock$", "^\\.sdlc/records/"],
+  "ships": ["^crates/", "^Cargo\\.toml$", "^Cargo\\.lock$", "^deploy/", "^argocd/", "Dockerfile"],
+  "code": ["\\.rs$"],
+  "tests": ["^crates/[^/]+/tests/", "/tests?\\.rs$", "_tests?\\.rs$"],
+  "areas": [
+    { "name": "cargo", "cwd": ".", "when": ["^crates/", "^Cargo\\.(toml|lock)$"], "tool": "cargo", "commands": ["cargo fmt --all --check", "cargo clippy --workspace --all-targets -- -D warnings", "cargo test --workspace"] }
+  ],
+  "onEdit": [
+    { "name": "rustfmt", "when": "\\.rs$", "cmd": "rustfmt", "args": ["--check", "--edition", "2021", "{file}"], "cwd": "." }
+  ],
+  "evidence": {
+    "e2e": ["^crates/server/src/", "^crates/api/src/"],
+    "browser": ["^crates/app/src/"]
+  },
+  "reviewScopes": [
+    { "name": "security", "agent": "review-security", "paths": ["."] },
+    { "name": "api", "agent": "review-api", "paths": ["^crates/api/", "^crates/server/src/(routes|api)/"] },
+    { "name": "operability", "agent": "review-operability", "paths": ["^crates/server/", "^deploy/", "^argocd/", "^\\.github/", "Dockerfile"] },
+    { "name": "web", "agent": "review-web", "paths": ["^crates/app/"] }
+  ]
+}

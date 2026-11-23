@@ -1,0 +1,6 @@
+{
+  "extraKnownMarketplaces": {
+    "agentic-sdlc": { "source": { "source": "github", "repo": "bbooth/agentic-sdlc" } }
+  },
+  "enabledPlugins": { "sdlc@agentic-sdlc": true }
+}
