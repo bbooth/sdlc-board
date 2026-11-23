@@ -1,0 +1,15 @@
+# The ticket pipeline's PR review gate, from bbooth/agentic-sdlc. Bump both
+# SHAs together to take a newer version of the gate.
+name: PR review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  pr-review:
+    uses: bbooth/agentic-sdlc/.github/workflows/pr-review.yaml@5ae2430aed21feb303a34dafd724c2e39c85e06a
+    with:
+      sdlc-ref: 5ae2430aed21feb303a34dafd724c2e39c85e06a
+      runner: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
