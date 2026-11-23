@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-9",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-23T22:20:35.691Z",
+  "inputs": {
+    "branch": "feat/tru-9-linear-board",
+    "commit": "ee97615"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-9-linear-board"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "24 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "3 test files changed with 10 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "796 lines changed; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at ee97615"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "7 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/server/src/sources.rs: the first failed read is thrown away before the retry, so an intermittent failure is never logged."
+    },
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/server/src/routes.rs: /v1/snapshot and /metrics have no request log and no rate, error or duration metric."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/linear.rs: the query reads closed tickets too and stops at MAX_PAGES without saying so. The query now asks only for open tickets; past 1000 open tickets per project the rest are still dropped without a warning."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "board.toml: lists two repos where the ticket asks for one."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/app/src/main.rs: card() draws only one level of sub-tickets."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/board.rs: a Stage-group label not in STAGES is put in Intake without a warning."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/linear.rs: a body-read error doesn't name the project."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
