@@ -12,6 +12,9 @@ pub const INTERVAL: Duration = Duration::from_secs(60);
 /// Something the board reads on an interval.
 pub trait Source: Send + Sync + 'static {
     fn name(&self) -> &'static str;
+    fn interval(&self) -> Duration {
+        INTERVAL
+    }
     fn read(&self) -> impl Future<Output = anyhow::Result<Read>> + Send;
 }
 
@@ -34,6 +37,9 @@ impl Source for crate::linear::Linear {
 impl Source for crate::github::GitHub {
     fn name(&self) -> &'static str {
         "github"
+    }
+    fn interval(&self) -> Duration {
+        self.interval()
     }
     async fn read(&self) -> anyhow::Result<Read> {
         Ok(Read { prs: self.prs().await?, ..Read::default() })
@@ -122,9 +128,9 @@ pub async fn refresh<S: Source>(state: &State, source: &S) {
     }
 }
 
-/// Reads the source now and then every [`INTERVAL`], forever.
+/// Reads the source now and then every interval, forever.
 pub async fn run<S: Source>(state: Arc<State>, source: S) {
-    let mut tick = tokio::time::interval(INTERVAL);
+    let mut tick = tokio::time::interval(source.interval());
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tick.tick().await;

@@ -17,17 +17,22 @@ fn sub_tickets_are_drawn_under_their_ticket_with_their_stages() {
     }
 }
 
-const NEEDS_YOU: &str = r#"{"generated_at": 0, "sources": [], "columns": [{"stage": "Build", "tickets": [
+const NEEDS_YOU: &str = r#"{"generated_at": 1000, "sources": [{"name": "linear", "last_good": 1000, "last_error": null},
+    {"name": "github", "last_good": 400, "last_error": "GitHub /repos/b/s/pulls: 403 rate limited"}],
+  "columns": [{"stage": "Build", "tickets": [
   {"id": "TRU-8", "title": "One board", "url": "u", "repo": "r", "stage": "Build", "children": [
     {"id": "TRU-9", "title": "a", "url": "u", "repo": "r", "stage": "PR review", "children": [],
      "gate": {"stage": "Adversarial review", "round": 2, "pass": true},
-     "pr": {"number": 4, "title": "TRU-9: a", "url": "https://github.com/b/s/pull/4", "checks": "pending"}}]}]}],
+     "pr": {"number": 4, "title": "TRU-9: a", "url": "https://github.com/b/s/pull/4", "checks": "pending"}},
+    {"id": "TRU-7", "title": "c", "url": "u", "repo": "r", "stage": "Rollout", "children": [],
+     "pr": {"number": 2, "title": "TRU-7: c", "url": "https://github.com/b/s/pull/2", "checks": "pass", "merged": true}}]}]}],
   "needs_you": [{"kind": "approve", "id": "TRU-20", "title": "A spec", "url": "https://linear.app/t/TRU-20"},
     {"kind": "merge", "id": "TRU-6", "title": "TRU-6: fields", "url": "https://github.com/b/s/pull/1"},
     {"kind": "blocked", "id": "TRU-11", "title": "Stuck", "url": "https://linear.app/t/TRU-11"}]}"#;
 
 // AC-2 and AC-3, app side: what needs the owner is listed above the columns
-// with links, and a sub-ticket's row shows its latest gate and its PR.
+// with links, a sub-ticket's row shows its latest gate and its PR, and a
+// source whose read failed says so with the age of its data.
 #[test]
 fn needs_you_is_listed_first_and_cards_show_their_gate_and_pr() {
     let snap: Snapshot = serde_json::from_str(NEEDS_YOU).unwrap();
@@ -39,4 +44,8 @@ fn needs_you_is_listed_first_and_cards_show_their_gate_and_pr() {
     }
     harness.get_by_label("Adversarial review round 2: pass");
     harness.get_by_label("PR #4 checks pending");
+    harness.get_by_label("PR #2 merged");
+    let stale = "github: the last read failed, data is 10 min old: GitHub /repos/b/s/pulls: 403 rate limited";
+    assert!(top(stale) < column);
+    assert!(harness.query_by_label_contains("linear: the last read failed").is_none());
 }

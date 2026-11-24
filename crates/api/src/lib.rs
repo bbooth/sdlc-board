@@ -68,7 +68,10 @@ pub struct Pr {
     pub number: u64,
     pub title: String,
     pub url: String,
+    /// Its checks while open; meaningless once `merged`.
     pub checks: Checks,
+    #[serde(default)]
+    pub merged: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

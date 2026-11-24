@@ -9,12 +9,19 @@ use std::collections::HashMap;
 async fn fake_github() -> String {
     let pr = |n: u64, title: &str, branch: &str, body: &str| {
         json!({"number": n, "title": title, "html_url": format!("https://github.com/bbooth/booking/pull/{n}"),
-               "draft": false, "head": {"sha": format!("sha{n}"), "ref": branch}, "body": body})
+               "draft": false, "head": {"sha": format!("sha{n}"), "ref": branch, "repo": {"full_name": "bbooth/booking"}},
+               "body": body, "merged_at": null, "merge_commit_sha": format!("merge{n}")})
     };
-    // GitHub lists the newest first. #5 only mentions TRU-6 in passing; #4
-    // names no ticket (TRU-800X, XTRU-9 and TRU- aren't IDs); #6's title
-    // names TRU-6 but its branch doesn't, so TRU-6's card keeps #1.
-    let pulls = json!([
+    // GitHub lists the newest first. #8's checks and records fail to read;
+    // #7 comes from a fork, so it doesn't count even though its branch names
+    // TRU-6. #5 only mentions TRU-6 in passing; #4 names no ticket
+    // (TRU-800X, XTRU-9 and TRU- aren't IDs); #6's title names TRU-6 but its
+    // branch doesn't, so TRU-6's card keeps #1.
+    let mut fork = pr(7, "TRU-6: take over", "feat/tru-6-mine", "");
+    fork["head"]["repo"]["full_name"] = json!("someone/booking");
+    let open = json!([
+        pr(8, "TRU-9: Broken reads", "feat/tru-9-broken", ""),
+        fork,
         pr(6, "Follow-up to TRU-6: docs", "docs/follow-up", ""),
         pr(5, "Run CI again on label changes", "ci/labels", "Found while opening TRU-6's PR."),
         pr(4, "Bump deps (TRU-800X)", "chore/XTRU-9", "TRU-"),
@@ -22,29 +29,40 @@ async fn fake_github() -> String {
         pr(2, "Drop the columns (TRU-7)", "backend/drop-columns", ""),
         pr(1, "TRU-6: Stop using the fields", "backend/tru-6-stop-using", ""),
     ]);
+    // #10 closed without merging; #9 merged, and its records are read at its merge.
+    let mut merged = pr(9, "TRU-11: Refresh", "feat/tru-11-refresh", "");
+    merged["merged_at"] = json!("2026-11-24T00:00:00Z");
+    let closed = json!([pr(10, "TRU-12: Abandoned", "feat/tru-12-old", ""), merged]);
+    let pulls = move |Query(q): Query<HashMap<String, String>>| async move {
+        Json(if q.get("state").map(String::as_str) == Some("closed") { closed } else { open })
+    };
     let runs = |sha: String| {
         let run = |status: &str, conclusion: Value| json!({"status": status, "conclusion": conclusion});
         let runs = match sha.as_str() {
+            "sha8" => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
             "sha1" | "sha6" => vec![run("completed", json!("success")), run("completed", json!("skipped"))],
             "sha2" => vec![run("completed", json!("success")), run("completed", json!("failure"))],
             _ => vec![run("completed", json!("success")), run("in_progress", Value::Null)],
         };
-        Json(json!({ "total_count": runs.len(), "check_runs": runs }))
+        Json(json!({ "total_count": runs.len(), "check_runs": runs })).into_response()
     };
     let contents = |Path(path): Path<String>, Query(q): Query<HashMap<String, String>>| async move {
         let names = ["build-1.json", "verify-1.json", "verify-2.json", "adversarial_review-1.json", "notes.txt"];
         match (path.as_str(), q.get("ref").map(String::as_str)) {
-            (".sdlc/records/TRU-6", Some("backend/tru-6-stop-using")) => {
-                Json(json!(names.map(|n| json!({ "name": n })))).into_response()
-            }
-            (".sdlc/records/TRU-6/adversarial_review-1.json", Some("backend/tru-6-stop-using")) => {
+            (".sdlc/records/TRU-6", Some("sha1")) => Json(json!(names.map(|n| json!({ "name": n })))).into_response(),
+            (".sdlc/records/TRU-6/adversarial_review-1.json", Some("sha1")) => {
                 Json(json!({"stage": "adversarial_review", "round": 1, "result": "fail"})).into_response()
             }
+            (".sdlc/records/TRU-11", Some("merge9")) => Json(json!([{ "name": "pr_review-1.json" }])).into_response(),
+            (".sdlc/records/TRU-11/pr_review-1.json", Some("merge9")) => {
+                Json(json!({"stage": "pr_review", "round": 1, "result": "pass"})).into_response()
+            }
+            (_, Some("sha8")) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
             _ => StatusCode::NOT_FOUND.into_response(),
         }
     };
     let app = Router::new()
-        .route("/repos/bbooth/booking/pulls", get(move || async move { Json(pulls) }))
+        .route("/repos/bbooth/booking/pulls", get(pulls))
         .route("/repos/bbooth/booking/commits/{sha}/check-runs", get(move |Path(sha)| async move { runs(sha) }))
         .route("/repos/bbooth/booking/contents/{*path}", get(contents));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -65,22 +83,29 @@ fn gate(stage: &str, round: u32, pass: bool) -> Gate {
 async fn checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read() {
     let prs = GitHub::new(&fake_github().await, None, vec![repo()]).unwrap().prs().await.unwrap();
 
-    let got: Vec<(&str, u64, Checks)> = prs.iter().map(|p| (p.ticket.as_str(), p.pr.number, p.pr.checks)).collect();
-    // #5 (named only in its body) and #4 are left out.
+    let got: Vec<(&str, u64, Checks, bool)> =
+        prs.iter().map(|p| (p.ticket.as_str(), p.pr.number, p.pr.checks, p.pr.merged)).collect();
+    // The fork's #7, #5 (named only in its body), #4 and the unmerged #10 are
+    // left out; #8 is kept though its reads failed.
     let tied = [
-        ("TRU-6", 6, Checks::Pass),
-        ("TRU-8", 3, Checks::Pending),
-        ("TRU-7", 2, Checks::Fail),
-        ("TRU-6", 1, Checks::Pass),
+        ("TRU-9", 8, Checks::Pending, false),
+        ("TRU-6", 6, Checks::Pass, false),
+        ("TRU-8", 3, Checks::Pending, false),
+        ("TRU-7", 2, Checks::Fail, false),
+        ("TRU-6", 1, Checks::Pass, false),
+        ("TRU-11", 9, Checks::Pass, true),
     ];
     assert_eq!(got, tied);
     let by_branch: Vec<bool> = prs.iter().map(|p| p.by_branch).collect();
-    assert_eq!(by_branch, [false, true, false, true]);
-    let prs: Vec<_> = prs.into_iter().rev().collect();
-    assert_eq!(prs[0].pr.url, "https://github.com/bbooth/booking/pull/1");
-    // A later stage beats a higher round of an earlier one; its result comes from the file.
-    assert_eq!(prs[0].gate, Some(gate("Adversarial review", 1, false)));
-    assert_eq!(prs[1].gate, None);
+    assert_eq!(by_branch, [true, false, true, false, true, true]);
+    let pr = |n: u64| prs.iter().find(|p| p.pr.number == n).unwrap();
+    assert_eq!(pr(1).pr.url, "https://github.com/bbooth/booking/pull/1");
+    // A later stage beats a higher round of an earlier one; its result comes
+    // from the file at the PR's head.
+    assert_eq!(pr(1).gate, Some(gate("Adversarial review", 1, false)));
+    assert_eq!(pr(3).gate, None);
+    assert_eq!(pr(8).gate, None);
+    assert_eq!(pr(9).gate, Some(gate("PR review", 1, true)));
 }
 
 #[tokio::test]

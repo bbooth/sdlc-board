@@ -9,12 +9,14 @@
   sub-tickets nested. `LINEAR_API_KEY=... cargo run -p board-server`, then
   `cargo run -p board-app` (`BOARD_URL`, default `http://localhost:8080`).
 
-- TRU-10: the server also reads each repo's open PRs from GitHub (checks,
-  and gate records on the PR's branch) and gate output posted on Linear
-  tickets. Cards show the latest gate and the PR; a "Needs you" list above
-  the columns has specs to approve, green PRs to merge and blocked tickets.
-  Set `GITHUB_TOKEN` (read-only): without one, GitHub's limit of 60
-  requests an hour runs out within the hour (`GITHUB_ENDPOINT` to override).
+- TRU-10: the server also reads each repo's open and recently merged PRs
+  from its own branches on GitHub (checks, and gate records at the PR's
+  head or merge) and gate output posted on Linear tickets. Cards show the
+  latest gate and the PR; a "Needs you" list above the columns has specs
+  to approve, green PRs to merge and blocked tickets, and a source whose
+  last read failed is named above it. Set `GITHUB_TOKEN` (read-only):
+  without one the server reads GitHub only every 30 minutes, to stay under
+  the limit of 60 requests an hour (`GITHUB_ENDPOINT` to override).
 
 ## Next
 

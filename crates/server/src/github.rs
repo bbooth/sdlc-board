@@ -6,7 +6,14 @@ use std::time::Duration;
 
 pub const ENDPOINT: &str = "https://api.github.com";
 
-/// An open PR, tied to the ticket its branch (or else its title) names.
+/// How often to read GitHub without a token: the unauthenticated limit is 60
+/// requests an hour, and one read costs a few per PR.
+pub const UNAUTHENTICATED_INTERVAL: Duration = Duration::from_secs(30 * 60);
+/// How many recently closed PRs to look through for merged ones.
+const RECENT: &str = "20";
+
+/// An open or recently merged PR from the repo's own branches, tied to the
+/// ticket its branch (or else its title) names.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrInfo {
     pub ticket: String,
@@ -15,11 +22,11 @@ pub struct PrInfo {
     /// The branch names the ticket, as pipeline branches do (`feat/tru-9-...`).
     /// A ticket with several PRs shows the one whose branch names it.
     pub by_branch: bool,
-    /// The latest gate record on the PR's branch.
+    /// The latest gate record at the PR's head, or at its merge.
     pub gate: Option<Gate>,
 }
 
-/// Reads each repo's open PRs, their checks and their gate records.
+/// Reads each repo's PRs, their checks and their gate records.
 pub struct GitHub {
     client: reqwest::Client,
     endpoint: String,
@@ -27,10 +34,22 @@ pub struct GitHub {
     repos: Vec<Repo>,
 }
 
+fn list(v: &Option<Value>) -> impl Iterator<Item = &Value> {
+    v.as_ref().and_then(Value::as_array).into_iter().flatten()
+}
+
 impl GitHub {
     pub fn new(endpoint: &str, token: Option<String>, repos: Vec<Repo>) -> anyhow::Result<Self> {
         let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).user_agent("sdlc-board").build()?;
         Ok(Self { client, endpoint: endpoint.into(), token, repos })
+    }
+
+    pub fn interval(&self) -> Duration {
+        if self.token.is_some() {
+            crate::sources::INTERVAL
+        } else {
+            UNAUTHENTICATED_INTERVAL
+        }
     }
 
     /// GETs an API path; `None` when it doesn't exist. The raw media type
@@ -53,36 +72,63 @@ impl GitHub {
         let mut out = Vec::new();
         for repo in &self.repos {
             let base = format!("/repos/{}", repo.name);
-            let pulls = self.get(&format!("{base}/pulls"), &[("state", "open"), ("per_page", "100")]).await?;
-            for p in pulls.as_ref().and_then(Value::as_array).into_iter().flatten() {
-                let title = p["title"].as_str().unwrap_or_default();
-                let (sha, branch) = (p["head"]["sha"].as_str().unwrap_or(""), p["head"]["ref"].as_str().unwrap_or(""));
-                // A body only mentions tickets in passing, so it ties nothing.
-                let on_branch = ticket_id(&branch.to_ascii_uppercase(), &repo.linear_team);
-                let Some(ticket) = on_branch.clone().or_else(|| ticket_id(title, &repo.linear_team)) else { continue };
-                let runs = self.get(&format!("{base}/commits/{sha}/check-runs"), &[("per_page", "100")]).await?;
-                let gate = self.record(&base, &ticket, branch).await?;
-                let pr = Pr {
-                    number: p["number"].as_u64().unwrap_or(0),
-                    title: title.into(),
-                    url: p["html_url"].as_str().unwrap_or_default().into(),
-                    checks: checks(runs.as_ref().unwrap_or(&Value::Null)),
-                };
-                out.push(PrInfo { ticket, pr, draft: p["draft"] == true, by_branch: on_branch.is_some(), gate });
+            let pulls = format!("{base}/pulls");
+            let open = self.get(&pulls, &[("state", "open"), ("per_page", "100")]).await?;
+            let recent = [("state", "closed"), ("sort", "updated"), ("direction", "desc"), ("per_page", RECENT)];
+            let closed = self.get(&pulls, &recent).await?;
+            let merged = list(&closed).filter(|p| !p["merged_at"].is_null());
+            for p in list(&open).chain(merged) {
+                // Anyone can open a PR from a fork, so only the repo's own branches count.
+                if p["head"]["repo"]["full_name"] == repo.name.as_str() {
+                    out.extend(self.pr_info(&base, repo, p).await);
+                }
             }
         }
         Ok(out)
     }
 
-    async fn record(&self, base: &str, ticket: &str, branch: &str) -> anyhow::Result<Option<Gate>> {
+    /// One PR's checks and gate; a part that fails to read is logged and
+    /// left unknown, so one bad PR doesn't fail the whole read.
+    async fn pr_info(&self, base: &str, repo: &Repo, p: &Value) -> Option<PrInfo> {
+        let title = p["title"].as_str().unwrap_or_default();
+        let branch = p["head"]["ref"].as_str().unwrap_or_default();
+        // A body only mentions tickets in passing, so it ties nothing.
+        let on_branch = ticket_id(&branch.to_ascii_uppercase(), &repo.linear_team);
+        let ticket = on_branch.clone().or_else(|| ticket_id(title, &repo.linear_team))?;
+        let (number, merged) = (p["number"].as_u64().unwrap_or(0), !p["merged_at"].is_null());
+        let at = if merged { &p["merge_commit_sha"] } else { &p["head"]["sha"] }.as_str().unwrap_or_default();
+        let warn = |what: &str, e: anyhow::Error| tracing::warn!(repo = %repo.name, pr = number, error = %e, "reading {what} failed");
+        // A merged PR's checks no longer matter; the card says it merged.
+        let checks = if merged {
+            Checks::Pass
+        } else {
+            match self.get(&format!("{base}/commits/{at}/check-runs"), &[("per_page", "100")]).await {
+                Ok(runs) => checks(runs.as_ref().unwrap_or(&Value::Null)),
+                Err(e) => {
+                    warn("checks", e);
+                    Checks::Pending
+                }
+            }
+        };
+        let gate = self.record(base, &ticket, at).await.unwrap_or_else(|e| {
+            warn("gate records", e);
+            None
+        });
+        let url = p["html_url"].as_str().unwrap_or_default().into();
+        let pr = Pr { number, title: title.into(), url, checks, merged };
+        Some(PrInfo { ticket, pr, draft: p["draft"] == true, by_branch: on_branch.is_some(), gate })
+    }
+
+    async fn record(&self, base: &str, ticket: &str, at: &str) -> anyhow::Result<Option<Gate>> {
         let dir = format!("{base}/contents/.sdlc/records/{ticket}");
-        let Some(files) = self.get(&dir, &[("ref", branch)]).await? else { return Ok(None) };
+        let Some(files) = self.get(&dir, &[("ref", at)]).await? else { return Ok(None) };
         let names = files.as_array().into_iter().flatten().filter_map(|f| f["name"].as_str());
         let latest =
             names.filter_map(|n| Some((n, gates::from_file_name(n)?))).max_by_key(|(_, (s, r))| (gates::order(s), *r));
         let Some((name, (stage, round))) = latest else { return Ok(None) };
-        let record = self.get(&format!("{dir}/{name}"), &[("ref", branch)]).await?.unwrap_or_default();
-        Ok(Some(Gate { stage, round, pass: record["result"] == "pass" }))
+        let record = self.get(&format!("{dir}/{name}"), &[("ref", at)]).await?;
+        let result = record.as_ref().and_then(|r| r["result"].as_str());
+        Ok(result.map(|r| Gate { stage, round, pass: r == "pass" }))
     }
 }
 

@@ -17,7 +17,7 @@ fn issue(id: &str, stage: &str, open: bool) -> Issue {
 
 fn pr(ticket: &str, number: u64, checks: Checks, draft: bool) -> PrInfo {
     let url = format!("https://github.com/bbooth/booking/pull/{number}");
-    let pr = Pr { number, title: format!("{ticket}: pr"), url, checks };
+    let pr = Pr { number, title: format!("{ticket}: pr"), url, checks, merged: false };
     PrInfo { ticket: ticket.into(), pr, draft, by_branch: true, gate: None }
 }
 
@@ -32,6 +32,7 @@ fn specs_to_approve_green_prs_and_blocked_tickets_need_the_owner() {
         issue("TRU-9", "PR review", true),
         issue("TRU-10", "PR review", true),
         issue("TRU-3", "Blocked", false),
+        issue("TRU-13", "PR review", true),
     ];
     let prs = [
         pr("TRU-6", 1, Checks::Pass, false),
@@ -40,6 +41,11 @@ fn specs_to_approve_green_prs_and_blocked_tickets_need_the_owner() {
         pr("TRU-10", 4, Checks::Pass, true),
         // Green, but its review hasn't run yet.
         pr("TRU-12", 5, Checks::Pass, false),
+        // Merged already: nothing left to merge.
+        PrInfo {
+            pr: Pr { merged: true, ..pr("TRU-13", 6, Checks::Pass, false).pr },
+            ..pr("TRU-13", 6, Checks::Pass, false)
+        },
     ];
     let items = board::needs_you(&issues, &prs);
 

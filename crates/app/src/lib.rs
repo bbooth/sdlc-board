@@ -3,9 +3,19 @@
 use board_api::{Checks, Snapshot, Ticket};
 use eframe::egui;
 
-/// What needs the owner, then a column per stage, each ticket a card with
-/// its sub-tickets nested.
+/// Any source whose last read failed, what needs the owner, then a column
+/// per stage, each ticket a card with its sub-tickets nested.
 pub fn board(ui: &mut egui::Ui, snap: &Snapshot) {
+    for s in &snap.sources {
+        if let Some(err) = &s.last_error {
+            // Without this the board would look current while showing old data.
+            let age = match s.last_good {
+                Some(t) => format!("data is {} min old", (snap.generated_at - t).max(0) / 60),
+                None => "no data yet".into(),
+            };
+            ui.colored_label(ui.visuals().warn_fg_color, format!("{}: the last read failed, {age}: {err}", s.name));
+        }
+    }
     if !snap.needs_you.is_empty() {
         egui::Frame::group(ui.style()).show(ui, |ui| {
             ui.strong(format!("Needs you ({})", snap.needs_you.len()));
@@ -68,6 +78,7 @@ fn details(ui: &mut egui::Ui, t: &Ticket) {
             Checks::Fail => "checks fail",
             Checks::Pending => "checks pending",
         };
-        ui.hyperlink_to(format!("PR #{} {checks}", pr.number), &pr.url);
+        let state = if pr.merged { "merged" } else { checks };
+        ui.hyperlink_to(format!("PR #{} {state}", pr.number), &pr.url);
     }
 }

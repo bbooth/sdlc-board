@@ -61,9 +61,10 @@ fn nest(issue: &Issue, children: &HashMap<&str, Vec<&Issue>>, prs: &[PrInfo]) ->
     }
 }
 
-/// The ticket's PR: the newest on a branch that names it, else the newest that names it.
+/// The ticket's PR: one on a branch that names it first, then an open one
+/// before a merged one, then the newest.
 fn pr_for<'a>(prs: &'a [PrInfo], id: &str) -> Option<&'a PrInfo> {
-    prs.iter().filter(|p| p.ticket == id).max_by_key(|p| (p.by_branch, p.pr.number))
+    prs.iter().filter(|p| p.ticket == id).max_by_key(|p| (p.by_branch, !p.pr.merged, p.pr.number))
 }
 
 /// What waits on the owner: specs to approve, PRs in PR review whose checks
@@ -79,7 +80,7 @@ pub fn needs_you(issues: &[Issue], prs: &[PrInfo]) -> Vec<NeedsYou> {
     let mut out: Vec<NeedsYou> =
         in_stage("Ready for approval").map(|i| item("approve", &i.id, &i.title, &i.url)).collect();
     let in_review = in_stage("PR review").filter_map(|i| pr_for(prs, &i.id));
-    let green = in_review.filter(|p| p.pr.checks == Checks::Pass && !p.draft);
+    let green = in_review.filter(|p| p.pr.checks == Checks::Pass && !p.draft && !p.pr.merged);
     out.extend(green.map(|p| item("merge", &p.ticket, &p.pr.title, &p.pr.url)));
     out.extend(in_stage("Blocked").map(|i| item("blocked", &i.id, &i.title, &i.url)));
     out

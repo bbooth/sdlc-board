@@ -13,9 +13,13 @@ async fn main() -> anyhow::Result<()> {
     let state = sources::State::new();
     let linear = linear::Linear::new(&endpoint, &key, config.repos.clone())?;
     tokio::spawn(sources::run(state.clone(), linear));
-    // Public repos read without a token, but only for a short while: the unauthenticated limit is 60 an hour.
     let gh_endpoint = std::env::var("GITHUB_ENDPOINT").unwrap_or_else(|_| github::ENDPOINT.into());
-    let github = github::GitHub::new(&gh_endpoint, std::env::var("GITHUB_TOKEN").ok(), config.repos.clone())?;
+    let token = std::env::var("GITHUB_TOKEN").ok();
+    if token.is_none() {
+        let mins = github::UNAUTHENTICATED_INTERVAL.as_secs() / 60;
+        tracing::warn!("GITHUB_TOKEN is not set: reading public repos every {mins} minutes, within GitHub's limit");
+    }
+    let github = github::GitHub::new(&gh_endpoint, token, config.repos.clone())?;
     tokio::spawn(sources::run(state.clone(), github));
     let listen = config.listen.as_deref().unwrap_or("0.0.0.0:8080");
     let listener = tokio::net::TcpListener::bind(listen).await?;
