@@ -29,8 +29,10 @@
   is read before any PR's details. The app reads the snapshot every 30
   seconds and shows when it last did; a failing source keeps its last data
   and is marked stale with its last good read and error, and a failed app
-  read keeps the board it had. A PR's checks show within 2 minutes only
-  with `GITHUB_TOKEN` set: without one, GitHub reads are spaced by cost.
+  read keeps the board it had. "Last refreshed" is the age of the oldest
+  source's data. A PR's checks show within 2 minutes only with
+  `GITHUB_TOKEN` set (GitHub is then read every minute): without one,
+  GitHub reads are spaced by cost, often 20 minutes or more.
 
 ## Next
 

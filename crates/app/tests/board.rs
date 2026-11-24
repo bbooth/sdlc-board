@@ -20,7 +20,7 @@ fn sub_tickets_are_drawn_under_their_ticket_with_their_stages() {
 const NEEDS_YOU: &str = r#"{"generated_at": 1000, "sources": [{"name": "linear", "last_good": 1000, "last_error": null},
     {"name": "github", "last_good": 400, "last_error": "GitHub /repos/b/s/pulls: 403 rate limited"}],
   "columns": [{"stage": "Build", "tickets": [
-  {"id": "TRU-8", "title": "One board", "url": "u", "repo": "r", "stage": "Build",
+  {"id": "TRU-8", "title": "One board", "url": "u", "repo": "bbooth/sdlc-board", "stage": "Build",
    "gate": {"stage": "Plan", "round": 1, "pass": true}, "children": [
     {"id": "TRU-9", "title": "a", "url": "u", "repo": "r", "stage": "PR review", "children": [],
      "gate": {"stage": "Adversarial review", "round": 2, "pass": true},
@@ -58,8 +58,19 @@ fn needs_you_is_listed_first_and_cards_show_their_gate_and_pr() {
     let stale = "github is stale (last good read 00:06 UTC, 10 min ago): GitHub /repos/b/s/pulls: 403 rate limited";
     assert!(top(stale) < column);
     assert!(harness.query_by_label_contains("linear is stale").is_none());
-    // AC-6, app side: when the data was last refreshed.
-    harness.get_by_label("Last refreshed 0 s ago");
+    // AC-6, app side: when the data was last refreshed, by its oldest source.
+    harness.get_by_label("Last refreshed 10 min ago");
+    // AC-5, app side: the card names its repo.
+    harness.get_by_label("bbooth/sdlc-board");
+}
+
+// AC-7, app side: a failed read of the snapshot keeps the board it had.
+#[test]
+fn a_failed_read_keeps_the_board_it_had() {
+    let (mut snap, mut error) = (None, None);
+    board_app::take(&mut snap, &mut error, Ok(serde_json::from_str(SNAPSHOT).unwrap()));
+    board_app::take(&mut snap, &mut error, Err("connection refused".into()));
+    assert_eq!((snap.map(|s| s.columns.len()), error.as_deref()), (Some(2), Some("connection refused")));
 }
 
 // AC-6, app side: the app reads the snapshot again every 30 seconds, one read at a time.

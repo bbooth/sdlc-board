@@ -14,6 +14,15 @@ pub fn due(since_last: Option<Duration>, in_flight: bool) -> bool {
     !in_flight && since_last.is_none_or(|d| d >= REFRESH)
 }
 
+/// Takes in a read of the snapshot: a failed one keeps the board it had and
+/// says why, so a server that's down doesn't blank it.
+pub fn take(snap: &mut Option<Snapshot>, error: &mut Option<String>, read: Result<Snapshot, String>) {
+    match read {
+        Ok(s) => (*snap, *error) = (Some(s), None),
+        Err(e) => *error = Some(e),
+    }
+}
+
 fn ago(secs: i64) -> String {
     match secs.max(0) {
         s if s < 60 => format!("{s} s ago"),
@@ -22,11 +31,12 @@ fn ago(secs: i64) -> String {
     }
 }
 
-/// When the snapshot was made, each stale source with its last good read and
-/// error, what needs the owner, then a column per stage of cards with
-/// sub-tickets nested. `now` is Unix seconds.
+/// How old the oldest source's data is, each stale source with its last good
+/// read and error, what needs the owner, then a column per stage of cards
+/// with sub-tickets nested. `now` is Unix seconds.
 pub fn board(ui: &mut egui::Ui, snap: &Snapshot, now: i64) {
-    ui.small(format!("Last refreshed {}", ago(now - snap.generated_at)));
+    let oldest = snap.sources.iter().filter_map(|s| s.last_good).min().unwrap_or(snap.generated_at);
+    ui.small(format!("Last refreshed {}", ago(now - oldest)));
     for s in &snap.sources {
         if let Some(err) = &s.last_error {
             let when = match s.last_good {

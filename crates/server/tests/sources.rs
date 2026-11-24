@@ -20,11 +20,21 @@ fn pr(repo: &str, n: u64, title: &str, branch: &str) -> Value {
            "head": {"sha": format!("sha{n}"), "ref": branch, "repo": {"full_name": repo}}, "merged_at": null})
 }
 
-/// Linear and GitHub fakes for two repos, booking and sdlc-board, in one
-/// Linear team. `moved` puts TRU-10 in Verify; `github_down` fails every GitHub call.
-async fn fakes() -> (String, Arc<AtomicBool>, Arc<AtomicBool>) {
-    let (moved, github_down) = (Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)));
-    let (m, down, down2) = (moved.clone(), github_down.clone(), github_down.clone());
+struct Fakes {
+    url: String,
+    /// Puts TRU-10 in Verify.
+    moved: Arc<AtomicBool>,
+    /// Fails every GitHub call.
+    github_down: Arc<AtomicBool>,
+    /// Finishes booking's running check.
+    checks_done: Arc<AtomicBool>,
+}
+
+/// Linear and GitHub fakes for two repos, booking and sdlc-board, in one Linear team.
+async fn fakes() -> Fakes {
+    let flag = || Arc::new(AtomicBool::new(false));
+    let (moved, github_down, checks_done) = (flag(), flag(), flag());
+    let (m, down, down2, done) = (moved.clone(), github_down.clone(), github_down.clone(), checks_done.clone());
     let linear = move |Json(req): Json<Value>| async move {
         let nodes = match req["variables"]["project"].as_str() {
             Some("Booking") => vec![ticket("TRU-6", "PR review")],
@@ -47,21 +57,36 @@ async fn fakes() -> (String, Arc<AtomicBool>, Arc<AtomicBool>) {
         })
         .into_response()
     };
-    let runs = move || async move {
+    let runs = move |Path((_, _, sha)): Path<(String, String, String)>| async move {
         if down2.load(Relaxed) {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
-        Json(json!({"check_runs": [{"status": "completed", "conclusion": "success"}]})).into_response()
+        let run = if sha == "sha1" && !done.load(Relaxed) {
+            json!({"status": "in_progress", "conclusion": null})
+        } else {
+            json!({"status": "completed", "conclusion": "success"})
+        };
+        Json(json!({"check_runs": [run]})).into_response()
+    };
+    // Only sdlc-board's branch holds TRU-10's records.
+    let contents = |Path((owner, name, path)): Path<(String, String, String)>| async move {
+        match (format!("{owner}/{name}").as_str(), path.as_str()) {
+            ("bbooth/sdlc-board", ".sdlc/records/TRU-10") => Json(json!([{"name": "build-1.json"}])).into_response(),
+            ("bbooth/sdlc-board", ".sdlc/records/TRU-10/build-1.json") => {
+                Json(json!({"result": "pass", "recorded_at": "2026-11-24T15:00:00Z"})).into_response()
+            }
+            _ => StatusCode::NOT_FOUND.into_response(),
+        }
     };
     let app = Router::new()
         .route("/graphql", post(linear))
         .route("/repos/{owner}/{name}/pulls", get(pulls))
         .route("/repos/{owner}/{name}/commits/{sha}/check-runs", get(runs))
-        .route("/repos/{owner}/{name}/contents/{*path}", get(|| async { StatusCode::NOT_FOUND }));
+        .route("/repos/{owner}/{name}/contents/{*path}", get(contents));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    (format!("http://{addr}"), moved, github_down)
+    Fakes { url: format!("http://{addr}"), moved, github_down, checks_done }
 }
 
 fn card<'a>(snap: &'a Snapshot, id: &str) -> &'a Ticket {
@@ -74,7 +99,7 @@ fn card<'a>(snap: &'a Snapshot, id: &str) -> &'a Ticket {
 // up a tokenless read's budget.
 #[tokio::test]
 async fn every_repo_in_the_settings_is_covered() {
-    let (url, ..) = fakes().await;
+    let url = fakes().await.url;
     let repos = vec![repo("bbooth/booking", "Booking"), repo("bbooth/sdlc-board", "SDLC board")];
     let state = sources::State::new();
     sources::refresh(&state, &Linear::new(&format!("{url}/graphql"), "k", repos.clone()).unwrap()).await;
@@ -94,6 +119,34 @@ async fn every_repo_in_the_settings_is_covered() {
     );
     // The 4 requests went to the two repos' lists, so no checks were read.
     assert_eq!(pr.checks, Checks::Unknown);
+
+    // With room to read them, each repo's own gate records reach its cards.
+    let repos = vec![repo("bbooth/booking", "Booking"), repo("bbooth/sdlc-board", "SDLC board")];
+    sources::refresh(&state, &GitHub::new(&url, None, repos).unwrap()).await;
+    let gate = card(&state.snapshot(), "TRU-10").gate.clone().unwrap();
+    assert_eq!((gate.stage.as_str(), gate.round, gate.pass), ("Build", 1, true));
+}
+
+// AC-6, server side: with a token GitHub is read every minute, so a check
+// that finishes shows on the next read, within 2 minutes.
+#[tokio::test]
+async fn with_a_token_finished_checks_show_on_the_next_minutes_read() {
+    let f = fakes().await;
+    let repos = vec![repo("bbooth/booking", "Booking")];
+    let (linear, github) = (
+        Linear::new(&format!("{}/graphql", f.url), "k", repos.clone()).unwrap(),
+        GitHub::new(&f.url, Some("token".into()), repos).unwrap(),
+    );
+    let state = sources::State::new();
+    sources::refresh(&state, &linear).await;
+    sources::refresh(&state, &github).await;
+    assert_eq!(card(&state.snapshot(), "TRU-6").pr.as_ref().unwrap().checks, Checks::Pending);
+    assert_eq!(github.interval(), sources::INTERVAL);
+    assert!(sources::INTERVAL <= std::time::Duration::from_secs(60));
+
+    f.checks_done.store(true, Relaxed);
+    sources::refresh(&state, &github).await;
+    assert_eq!(card(&state.snapshot(), "TRU-6").pr.as_ref().unwrap().checks, Checks::Pass);
 }
 
 // AC-7: GitHub fails after one good read. The board keeps its PRs, marks
@@ -101,7 +154,8 @@ async fn every_repo_in_the_settings_is_covered() {
 // keeps updating.
 #[tokio::test]
 async fn a_failing_source_keeps_its_data_and_the_others_keep_updating() {
-    let (url, moved, github_down) = fakes().await;
+    let Fakes { url, moved, github_down, checks_done } = fakes().await;
+    checks_done.store(true, Relaxed);
     let repos = vec![repo("bbooth/booking", "Booking"), repo("bbooth/sdlc-board", "SDLC board")];
     let (linear, github) =
         (Linear::new(&format!("{url}/graphql"), "k", repos.clone()).unwrap(), GitHub::new(&url, None, repos).unwrap());

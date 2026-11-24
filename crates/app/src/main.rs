@@ -45,11 +45,9 @@ impl BoardApp {
                 .and_then(|r| if r.ok { Ok(r) } else { Err(format!("{} {}", r.status, r.status_text)) })
                 .and_then(|r| serde_json::from_slice::<Snapshot>(&r.bytes).map_err(|e| e.to_string()));
             let mut l = latest.lock().unwrap_or_else(|e| e.into_inner());
-            l.in_flight = false;
-            match parsed {
-                Ok(snap) => (l.snap, l.error) = (Some(snap), None),
-                Err(e) => l.error = Some(e),
-            }
+            let Latest { snap, error, in_flight, .. } = &mut *l;
+            *in_flight = false;
+            board_app::take(snap, error, parsed);
             ctx.request_repaint();
         });
     }
@@ -74,7 +72,8 @@ impl eframe::App for BoardApp {
         egui::Panel::top("bar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("SDLC board");
-                if ui.button("Refresh").clicked() {
+                // One read at a time, so an older answer can't land after a newer one.
+                if ui.add_enabled(!in_flight, egui::Button::new("Refresh")).clicked() {
                     self.fetch(ctx.clone());
                 }
                 if let Some(e) = &error {
