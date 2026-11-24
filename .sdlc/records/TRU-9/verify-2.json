@@ -1,0 +1,121 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-9",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-24T03:19:02.394Z",
+  "inputs": {
+    "branch": "feat/tru-9-linear-board",
+    "commit": "1e01d6d",
+    "build_record": ".sdlc/records/TRU-9/build-3.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-9/build-3.json says pass at d3de19f"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since d3de19f"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 1e01d6d"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 1e01d6d"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-1, AC-10"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "7 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e and browser evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "3 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/server/tests/linear.rs:open_tickets_land_once_in_their_stage_with_sub_tickets_nested passed: cargo test --locked -p board-server --test linear open_tickets_land_once_in_their_stage_with_sub_tickets_nested"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:sub_tickets_are_drawn_under_their_ticket_with_their_stages passed: cargo test --locked -p board-app --test board sub_tickets_are_drawn_under_their_ticket_with_their_stages"
+    },
+    {
+      "name": "rerun:AC-10",
+      "pass": true,
+      "detail": "crates/server/tests/metrics.rs:reads_errors_duration_and_age_are_exported_per_source passed: cargo test --locked -p board-server --test metrics reads_errors_duration_and_age_are_exported_per_source"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "5 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/tests/metrics.rs:39-41: age is only checked as >= 0 and < 5, so a gauge stuck at 0 passes (observed: replacing ages() with constant 0.0 left the test green). Nothing checks that age grows, or that a source with no good read reports a growing age. I verified both end to end only."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/linear.rs:38 / board.rs: two configured repos that point at the same Linear project put each ticket on the board twice. Observed: TRU-8 appeared twice, once per repo name, in the snapshot. Config loading doesn't reject or merge duplicate projects."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/board.rs:38,47: tickets and sub-tickets are sorted as strings, so TRU-10..TRU-14 come before TRU-9 (seen in the snapshot and the app)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "board.toml configures only the Booking project, so a local run with it shows only TRU-5 (the only open Booking ticket today). The ticket's end-to-end example of 'TRU-5 to TRU-8' only holds when the 'SDLC board' project is added to the config. Linear state has also moved: TRU-6 and TRU-7 are Done."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/linear.rs:41: MAX_PAGES caps a project at 1000 open tickets. Pages after that are dropped with no log line or error, so the board would look complete when it isn't (inspection only)."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-1 test crates/server/tests/linear.rs:open_tickets_land_once_in_their_stage_with_sub_tickets_nested: PASS. Fails when sub-tickets are also added as roots, when closed tickets are kept, or when the stage is ignored in choosing a column",
+    "AC-1 test crates/app/tests/board.rs:sub_tickets_are_drawn_under_their_ticket_with_their_stages: PASS. Fails when children() isn't called, when the child stage label is dropped, when nesting doesn't recurse, or when the column header loses its count",
+    "AC-1 e2e GET /v1/snapshot, server run against real Linear with board.toml plus the 'SDLC board' project: 200. Outcome: TRU-5. Build: TRU-8 with children TRU-10..14 (Build) and TRU-9 (Verify). Closed TRU-6 and TRU-7 absent. Matches a direct Linear GraphQL query",
+    "AC-1 browser target/debug/board-app under Xvfb, BOARD_URL=http://127.0.0.1:18080: Columns Intake..Blocked with counts. TRU-8 card in Build lists TRU-10..14 '· Build' and TRU-9 '· Verify'. TRU-5 card in Outcome",
+    "AC-10 test crates/server/tests/metrics.rs:reads_errors_duration_and_age_are_exported_per_source: PASS. Fails with reads not counted, errors not counted, duration not observed or age not set. Still passes with age forced to 0",
+    "AC-10 e2e GET /metrics, server against real Linear: All four board_source_* series with source=\"linear\". Errors 0. Age grew 5 -> 21, then reset to 13 after the 60s re-read. reads_total went 1 -> 2",
+    "AC-10 e2e GET /metrics, server with LINEAR_ENDPOINT=http://127.0.0.1:1/graphql: reads_total 1 and read_errors_total 1, then 2 and 2. Age 5.0 -> 73.8 with no good read. Snapshot last_error set"
+  ]
+}
