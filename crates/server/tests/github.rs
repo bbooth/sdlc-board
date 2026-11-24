@@ -74,6 +74,7 @@ async fn fake_github() -> (String, Arc<AtomicU8>) {
         };
         Json(json!({ "total_count": runs.len(), "check_runs": runs })).into_response()
     };
+    let record = |result: &str, at: &str| Json(json!({"result": result, "recorded_at": at})).into_response();
     let contents = move |Path(path): Path<String>, Query(q): Query<HashMap<String, String>>| async move {
         if m3.load(Relaxed) & PARTS_FAIL != 0 {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -81,13 +82,13 @@ async fn fake_github() -> (String, Arc<AtomicU8>) {
         let names = ["build-1.json", "verify-1.json", "verify-2.json", "adversarial_review-1.json", "notes.txt"];
         match (path.as_str(), q.get("ref").map(String::as_str)) {
             (".sdlc/records/TRU-6", Some("sha1")) => Json(json!(names.map(|n| json!({ "name": n })))).into_response(),
-            (".sdlc/records/TRU-6/adversarial_review-1.json", Some("sha1")) => {
-                Json(json!({"stage": "adversarial_review", "round": 1, "result": "fail"})).into_response()
-            }
+            // The review failed, then Build and Verify passed again in the
+            // same second: times compare by value, not as text.
+            (".sdlc/records/TRU-6/build-1.json", Some("sha1")) => record("pass", "2026-11-24T03:00:00Z"),
+            (".sdlc/records/TRU-6/verify-2.json", Some("sha1")) => record("pass", "2026-11-24T03:00:00.500Z"),
+            (".sdlc/records/TRU-6/adversarial_review-1.json", Some("sha1")) => record("fail", "2026-11-24T02:00:00Z"),
             (".sdlc/records/TRU-11", Some("merge9")) => Json(json!([{ "name": "pr_review-1.json" }])).into_response(),
-            (".sdlc/records/TRU-11/pr_review-1.json", Some("merge9")) => {
-                Json(json!({"stage": "pr_review", "round": 1, "result": "pass"})).into_response()
-            }
+            (".sdlc/records/TRU-11/pr_review-1.json", Some("merge9")) => record("pass", "2026-11-24T04:00:00.000Z"),
             (_, Some("sha8")) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
             _ => StatusCode::NOT_FOUND.into_response(),
         }
@@ -106,8 +107,8 @@ fn repo() -> Repo {
     Repo { name: "bbooth/booking".into(), linear_team: "TRU".into(), linear_project: "Booking".into() }
 }
 
-fn gate(stage: &str, round: u32, pass: bool) -> Gate {
-    Gate { stage: stage.into(), round, pass }
+fn gate(stage: &str, round: u32, pass: bool, at: &str) -> Gate {
+    Gate { stage: stage.into(), round, pass, at: Some(at.into()) }
 }
 
 #[tokio::test]
@@ -131,18 +132,19 @@ async fn checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read() {
     assert_eq!(by_branch, [true, false, true, false, true, true]);
     let pr = |n: u64| prs.iter().find(|p| p.pr.number == n).unwrap();
     assert_eq!(pr(1).pr.url, "https://github.com/bbooth/booking/pull/1");
-    // A later stage beats a higher round of an earlier one; its result comes
-    // from the file at the PR's head.
-    assert_eq!(pr(1).gate, Some(gate("Adversarial review", 1, false)));
+    // The gate recorded last wins, though an earlier stage: Verify round 2
+    // passed after the review failed. Its result comes from the file at the PR's head.
+    assert_eq!(pr(1).gate, Some(gate("Verify", 2, true, "2026-11-24T03:00:00.500Z")));
     assert_eq!(pr(3).gate, None);
     assert_eq!(pr(8).gate, None);
-    assert_eq!(pr(9).gate, Some(gate("PR review", 1, true)));
+    assert_eq!(pr(9).gate, Some(gate("PR review", 1, true, "2026-11-24T04:00:00.000Z")));
 }
 
 #[tokio::test]
 async fn a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr() {
     let prs = GitHub::new(&fake_github().await.0, None, vec![repo()]).unwrap().prs().await.prs;
-    let issue = |id: &str, comment: &str| board::Issue {
+    // Each comment is posted at hour h of 2026-11-24.
+    let issue = |id: &str, comments: &[(u32, &str)]| board::Issue {
         id: id.into(),
         title: id.into(),
         url: format!("https://linear.app/t/{id}"),
@@ -150,30 +152,46 @@ async fn a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr
         stage: Some("PR review".into()),
         parent: None,
         open: true,
-        gates: board_server::gates::from_comment(comment),
+        gates: comments
+            .iter()
+            .flat_map(|(h, body)| {
+                board_server::gates::from_comment(body, Some(&format!("2026-11-24T{h:02}:00:00.000Z")))
+            })
+            .collect(),
     };
     let issues = [
-        issue("TRU-6", "### Gate: PR review (pass) · round 1\n- Checks: ..."),
-        issue("TRU-7", "### Gate: Build (fail) · round 3"),
-        issue("TRU-8", "No gate here"),
-        // The owner sent the PR back after its review passed.
-        issue("TRU-9", "### Gate: PR review (pass) · round 1\n\n### Gate: PR review approval (fail) · round 1"),
-        issue("TRU-10", "### Gate: Spec approval (pass) · round 1\n### Gate: Spec (pass) · round 2"),
+        issue("TRU-6", &[(0, "### Gate: Build (pass) · round 1\n- Checks: ...")]),
+        // Two gates in one comment fall back to stage order.
+        issue("TRU-7", &[(1, "### Gate: Build (pass) · round 3\n### Gate: Verify (fail) · round 3")]),
+        issue("TRU-8", &[(1, "No gate here")]),
+        // The owner sent the PR back after its review passed, and Build ran again.
+        issue(
+            "TRU-9",
+            &[
+                (5, "### Gate: PR review (pass) · round 1"),
+                (6, "### Gate: PR review approval (fail) · round 1"),
+                (7, "### Gate: Build (pass) · round 4"),
+            ],
+        ),
+        // A rejected spec, revised.
+        issue("TRU-10", &[(1, "### Gate: Spec approval (fail) · round 1"), (2, "### Gate: Spec (pass) · round 2")]),
+        issue("TRU-12", &[(1, "### Gate: Spec (pass) · round 1"), (2, "### Gate: Spec approval (pass) · round 1")]),
     ];
     let cols = board::columns(&issues, &prs);
     let tickets = &cols.iter().find(|c| c.stage == "PR review").unwrap().tickets;
     let card = |id: &str| tickets.iter().find(|t| t.id == id).unwrap();
 
+    let at = |h: u32| format!("2026-11-24T{h:02}:00:00.000Z");
     // TRU-6: its own PR, on the branch naming it, not #6 whose title mentions it;
-    // and the comment's PR review beats the branch's Adversarial review.
-    assert_eq!(card("TRU-6").gate, Some(gate("PR review", 1, true)));
+    // and the branch's Verify, recorded after the comment's Build, wins.
+    assert_eq!(card("TRU-6").gate, Some(gate("Verify", 2, true, "2026-11-24T03:00:00.500Z")));
     assert_eq!(card("TRU-6").pr.as_ref().map(|p| (p.number, p.checks)), Some((1, Checks::Pass)));
-    assert_eq!(card("TRU-7").gate, Some(gate("Build", 3, false)));
+    assert_eq!(card("TRU-7").gate, Some(gate("Verify", 3, false, &at(1))));
     assert_eq!(card("TRU-8").gate, None);
     assert_eq!(card("TRU-8").pr.as_ref().unwrap().checks, Checks::Pending);
-    // An owner's decision comes after the gate it decides on.
-    assert_eq!(card("TRU-9").gate, Some(gate("PR review approval", 1, false)));
-    assert_eq!(card("TRU-10").gate, Some(gate("Spec approval", 1, true)));
+    assert_eq!(card("TRU-9").gate, Some(gate("Build", 4, true, &at(7))));
+    assert_eq!(card("TRU-10").gate, Some(gate("Spec", 2, true, &at(2))));
+    assert_eq!(card("TRU-12").gate, Some(gate("Spec approval", 1, true, &at(2))));
     // TRU-6 is in PR review with two green PRs; only its own is a merge to do.
     let merges: Vec<String> = board::needs_you(&issues, &prs).into_iter().map(|n| n.url).collect();
     assert_eq!(merges, ["https://github.com/bbooth/booking/pull/1"]);
@@ -194,7 +212,10 @@ async fn a_failed_part_keeps_its_earlier_value_and_marks_the_source() {
     let second = github.prs().await;
     // #1's records at its commit were read already, so they aren't read again.
     let pr1 = pr(&second, 1);
-    assert_eq!((pr1.pr.checks, pr1.gate.clone()), (Checks::Pass, Some(gate("Adversarial review", 1, false))));
+    assert_eq!(
+        (pr1.pr.checks, pr1.gate.clone()),
+        (Checks::Pass, Some(gate("Verify", 2, true, "2026-11-24T03:00:00.500Z")))
+    );
     assert_eq!(pr1.read_at, pr(&first, 1).read_at);
     assert!(pr1.read_at < sources::now());
     // #8 had nothing to keep.
@@ -247,9 +268,9 @@ async fn without_a_token_reads_are_spaced_by_what_they_cost() {
     let github = GitHub::new(&url, None, vec![repo()]).unwrap();
     github.prs().await;
     let wait = github.interval();
-    // 15 requests: two lists, checks for 5 tied open PRs, a records folder
-    // for each of the 6 tied PRs, and the 2 latest record files.
-    assert_eq!(wait, Duration::from_secs(15 * 3600 / 45));
+    // 17 requests: two lists, checks for 5 tied open PRs, a records folder
+    // for each of the 6 tied PRs, and the top round of each stage there (3 + 1).
+    assert_eq!(wait, Duration::from_secs(17 * 3600 / 45));
     assert_eq!(github.interval(), sources::INTERVAL, "the count starts again after each interval");
 
     // Records at a commit never change, so the next read sends only the

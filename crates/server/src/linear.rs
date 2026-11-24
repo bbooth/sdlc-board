@@ -11,7 +11,7 @@ const MAX_PAGES: usize = 10;
 const QUERY: &str = r#"query Board($team: String!, $project: String!, $after: String) {
   issues(first: 100, after: $after, filter: {team: {key: {eq: $team}}, project: {name: {eq: $project}}, state: {type: {nin: ["completed", "canceled"]}}}) {
     pageInfo { hasNextPage endCursor }
-    nodes { identifier title url state { type } parent { identifier } labels { nodes { name parent { name } } } comments(first: 50) { nodes { body } } }
+    nodes { identifier title url state { type } parent { identifier } labels { nodes { name parent { name } } } comments(first: 50) { nodes { body createdAt } } }
   }
 }"#;
 
@@ -82,8 +82,8 @@ pub fn parse_page(body: &str, repo: &str) -> anyhow::Result<Page> {
                     .as_array()
                     .into_iter()
                     .flatten()
-                    .filter_map(|c| c["body"].as_str())
-                    .flat_map(gates::from_comment)
+                    .filter_map(|c| Some(gates::from_comment(c["body"].as_str()?, c["createdAt"].as_str())))
+                    .flatten()
                     .collect(),
             })
         })

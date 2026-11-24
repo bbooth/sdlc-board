@@ -63,6 +63,9 @@ pub struct Gate {
     pub stage: String,
     pub round: u32,
     pub pass: bool,
+    /// When it was recorded (RFC 3339, UTC), if known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

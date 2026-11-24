@@ -2,7 +2,7 @@ use crate::config::Repo;
 use crate::gates;
 use board_api::{Checks, Gate, Pr};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -200,16 +200,29 @@ impl GitHub {
         Some(PrInfo { ticket, pr, draft, by_branch, gate, at, gate_read, read_at })
     }
 
+    /// File names don't say which gate came last, so this reads each stage's
+    /// highest round and keeps the one recorded last.
     async fn record(&self, base: &str, ticket: &str, at: &str) -> anyhow::Result<Option<Gate>> {
         let dir = format!("{base}/contents/.sdlc/records/{ticket}");
         let Some(files) = self.get(&dir, &[("ref", at)]).await? else { return Ok(None) };
-        let names = files.as_array().into_iter().flatten().filter_map(|f| f["name"].as_str());
-        let latest =
-            names.filter_map(|n| Some((n, gates::from_file_name(n)?))).max_by_key(|(_, (s, r))| (gates::order(s), *r));
-        let Some((name, (stage, round))) = latest else { return Ok(None) };
-        let record = self.get(&format!("{dir}/{name}"), &[("ref", at)]).await?;
-        let result = record.as_ref().and_then(|r| r["result"].as_str());
-        Ok(result.map(|r| Gate { stage, round, pass: r == "pass" }))
+        let mut top: BTreeMap<String, (u32, String)> = BTreeMap::new();
+        for name in files.as_array().into_iter().flatten().filter_map(|f| f["name"].as_str()) {
+            if let Some((stage, round)) = gates::from_file_name(name) {
+                let e = top.entry(stage).or_insert((round, name.into()));
+                if round > e.0 {
+                    *e = (round, name.into());
+                }
+            }
+        }
+        let mut read = Vec::new();
+        for (stage, (round, name)) in top {
+            let record = self.get(&format!("{dir}/{name}"), &[("ref", at)]).await?;
+            if let Some(r) = record.as_ref().filter(|r| r["result"].is_string()) {
+                let at = r["recorded_at"].as_str().map(String::from);
+                read.push(Gate { stage, round, pass: r["result"] == "pass", at });
+            }
+        }
+        Ok(gates::latest(&read))
     }
 }
 
