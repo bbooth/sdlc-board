@@ -1,0 +1,167 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-9",
+  "round": 1,
+  "result": "fail",
+  "recorded_at": "2026-11-24T03:06:54.876Z",
+  "inputs": {
+    "branch": "feat/tru-9-linear-board",
+    "commit": "e1f4ea5",
+    "verify_record": ".sdlc/records/TRU-9/verify-1.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-9/verify-1.json says pass at f71577a"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since f71577a"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at e1f4ea5"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read e1f4ea5"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, api, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "17 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "1 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "1 stand: [web] crates/app/src/main.rs:85: no test renders the app. AC-1's 'When the owner opens the board; Then ... sub-tickets nested under it and each sub-ticket's own stage shown' is tested only through board::columns in crates/server/tests/linear.rs. Delete `children(ui, t, 0)` at line 91, or the `c.stage` label at line 100, and every test still passes while the board shows no sub-tickets or no stages. That breaks the constitution's 'each [criterion] covered by a test that fails without the change' for the app half of AC-1, and the review rule 'a component changed with no test that renders it'. board-app is a binary-only crate with nothing under crates/app/tests/, so the config's tests patterns can't find any app test."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/routes.rs:10: /v1/snapshot and /metrics have no auth check, and config.rs:21 binds 0.0.0.0:8080 by default, so anyone who can reach the host can read every configured project's ticket titles, URLs and source errors. ADR 0001 says the server checks Access's signed header itself. The ticket defers that to TRU-12 and nothing deploys before then. Flagging it so TRU-12 doesn't ship without it, and so a local run can default to 127.0.0.1 in the meantime.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:100: the reqwest or Linear GraphQL error text goes into SourceStatus.last_error verbatim and is served to every /v1/snapshot caller. Examples are Linear's 'authentication required' messages and the endpoint URL taken from LINEAR_ENDPOINT. That's harmless today, but once the route is exposed it tells an outsider about the server's credentials and upstream. Consider a fixed category in the snapshot and keeping the detail in the log line.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:49: resp.text() reads the whole Linear response with no size cap, bounded only by the 20s timeout. A bad or hijacked endpoint (LINEAR_ENDPOINT is overridable) could make the server buffer an unbounded body. Low risk because the upstream is trusted.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/routes.rs:12: /healthz is a route the ticket's Changes list doesn't name (it lists /v1/snapshot and /metrics). It's unauthenticated and returns a constant 'ok', so it exposes nothing. It's noted only as unrequested surface, though STATUS.md does document it.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/board.rs:44: a Stage label that isn't in STAGES (a renamed or misspelled label) is served as stage \"Intake\" in /v1/snapshot, the same value as a ticket with no Stage label. A client can't tell a ticket that hasn't entered the pipeline from one whose label the board doesn't know, and a sub-ticket labelled that way shows \"· Intake\" in the app. The snapshot carries no field that would show the label was dropped.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/api/src/lib.rs:13: the /v1 snapshot types have no #[serde(default)] and nothing in the ADR (docs/adr/0001-snapshot-server-and-egui-app.md) says how /v1 changes. Native and Android builds (TRU-13) will run against a server deployed separately. If TRU-10/TRU-11 add a required field here, an app built from that branch fails to parse the whole snapshot from a server still on this version, and the app then shows only \"Couldn't load the board\". An older app against a newer server is fine for added fields, because serde ignores unknown ones.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:47: error_for_status() throws away the response body. Linear answers a malformed or rejected GraphQL query (a bad filter, a schema change) with HTTP 400 and its reason in errors[].message, so the warn in sources.rs:99 logs only \"400 Bad Request for url\". The errors handling in parse_page (line 71) never sees those messages, and the operator can't tell from the log why every read fails.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:36: if a project still has hasNextPage after MAX_PAGES (1,000 open tickets), the loop stops and returns Ok with a partial list. refresh then updates last_good and resets board_source_age_seconds, so the truncated board looks like a good read and nothing is logged. A warn, or an error, when the page cap is hit would make it visible.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:51: parse_page errors (\"Linear response: ...\", \"Linear: ...\", \"Linear response has no issues\") skip the per-project context that the send and text errors add on lines 46-50. Once board.toml lists more than one repo (TRU-11), the failure log can't say which project's response was bad.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/routes.rs:12: /healthz returns ok as soon as the listener binds, before the first Linear read. Until that read finishes (up to about 40s with the retry), /v1/snapshot serves sources: [] and empty columns, and the app shows that as an empty board with no error. board_source_* for linear is also not exported until the first refresh inserts its entry (sources.rs:68-71). Matters once TRU-12 wires this up as a readiness probe.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/main.rs:20: axum::serve has no with_graceful_shutdown and nothing handles SIGTERM. Run as PID 1 in a container, the process ignores SIGTERM, so each rollout waits out the termination grace period and then gets SIGKILL. In-flight requests are cut off rather than drained. There is no deploy until TRU-12, so not blocking here.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:80: a read has no overall deadline. Each request has a 20s timeout, but one read can make 10 pages x repos x 2 attempts of them, so with several repos (TRU-11) a slow Linear can stall a read for many minutes. Meanwhile reads_total and the duration histogram don't move until it ends, and the duration buckets stop at 40s (metrics.rs:22).",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/app/src/main.rs:85: no test renders the app. AC-1's 'When the owner opens the board; Then ... sub-tickets nested under it and each sub-ticket's own stage shown' is tested only through board::columns in crates/server/tests/linear.rs. Delete `children(ui, t, 0)` at line 91, or the `c.stage` label at line 100, and every test still passes while the board shows no sub-tickets or no stages. That breaks the constitution's 'each [criterion] covered by a test that fails without the change' for the app half of AC-1, and the review rule 'a component changed with no test that renders it'. board-app is a binary-only crate with nothing under crates/app/tests/, so the config's tests patterns can't find any app test.",
+      "status": "open",
+      "scope": "web",
+      "reason": "crates/app has only Cargo.toml and src/main.rs. No tests dir and no inline tests, and nothing in crates/ besides crates/app/Cargo.toml mentions board-app or board_app, so no test can reach card() or children(). Removing main.rs:91 or :100 therefore leaves every test passing. The only AC-1 test (linear.rs open_tickets_land_once_in_their_stage_with_sub_tickets_nested) asserts on board::columns output, not on what the app draws. Both rules are quoted correctly: constitution.md Quality ('each covered by a test that fails without the change') and review-web.md Tests ('A component changed with no test that renders it'). verify-1.json records browser evidence of the app running, but that is a manual observation, not a test that fails without the change, so it does not satisfy the rule.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:39: a failed fetch overwrites a board that loaded fine. Load the board, restart the server (or lose the network), then press Refresh: the connection is refused and the whole board is replaced by one red error line until a later Refresh works. Keeping the last good snapshot with the error shown beside it would keep the board usable.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:52: Refresh gives no sign that a fetch is running and doesn't guard against a double press. Each press starts another ehttp request on its own thread, and whichever reply lands last wins, so a slow first reply can overwrite a newer one. A refresh that returns the same data looks exactly like a press that did nothing.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:65: the app can't tell 'no tickets' apart from 'no data yet'. Between server start and the first finished Linear read (up to 40s with the 20s timeout and one retry), /v1/snapshot returns 11 empty columns with sources: [] and the app shows every column at (0), as if the pipeline were empty. This is related to the verify finding about ignoring snapshot.sources, but here no read has happened at all. TRU-11 covers only showing stale sources.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:99: a nested sub-ticket shows only its ID and stage, never its title, so the owner can't tell what TRU-6 is without opening Linear. The top-level card shows the title at line 89.",
+      "status": "open",
+      "scope": "web"
+    }
+  ],
+  "decision": "Back to Build: fix what stands, then Build, Verify and review again",
+  "evidence": []
+}
