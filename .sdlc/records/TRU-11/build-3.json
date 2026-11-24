@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-11",
+  "round": 3,
+  "result": "pass",
+  "recorded_at": "2026-11-24T17:25:05.553Z",
+  "inputs": {
+    "branch": "feat/tru-11-every-repo-refresh",
+    "commit": "e25a061"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-11-every-repo-refresh"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "19 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "3 test files changed with 6 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "482 lines changed, counting 291 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at e25a061"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "8 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "Adversarial review round 1 [web]: dropping ehttp for ureq on std::thread reverses ADR 0001's wasm plan with no ADR, and std::time::Instant in Reads panics on wasm.",
+      "reason": "ADR 0001 is amended: native fetches with ureq and a 20 s deadline because ehttp's native GET has none before headers; the wasm entry (TRU-12) fetches with ehttp behind a target_arch cfg, so ureq is now a native-only dependency in crates/app/Cargo.toml. Reads keeps time with web_time::Instant, std's natively and the browser's clock on wasm."
+    },
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/server/src/sources.rs:44: when one Linear repo fails, linear's last_good is set to now() while that repo's tickets are kept from an earlier read, so the stale line and the age metric say the data is fresh.",
+      "reason": "Linear::last keeps each repo's read time with its tickets; a failed repo's kept read time becomes the read's as_of (the oldest), which refresh uses as last_good. The test one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates now asserts last_good stays at the first read's time after a later read."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Adversarial review round 1 [operability]: Linear reads every repo as one all-or-nothing read, and a misspelt linear_project silently returns no tickets.",
+      "reason": "Linear reads each repo apart, keeps a failing repo's tickets and reports '1 of 2 repos failed, first: …'; an empty project logs a warning naming the repo and project. Tested by one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Adversarial review round 1 [web]: with no board yet and a failed read, the panel keeps saying 'Loading from <url>…'.",
+      "reason": "It now says 'No board yet: the next read is due within 30 s.'"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Adversarial review round 1 [web] and task review round 3: ages subtract the server's last_good from the client's clock, so a skewed device clock makes stale data look fresh.",
+      "reason": "The app tells ages by Reads::server_now: the snapshot's generated_at plus the time since it came back. Tested by ages_go_by_the_servers_clock."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Adversarial review round 1 [web]: nested sub-tickets don't name their repo.",
+      "reason": "A sub-ticket row shows its repo when it differs from its parent's; the board test asserts the bbooth/booking label on one."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Task review round 3: ADR 0001's amendment says the wasm build still fetches with ehttp, but ehttp isn't a dependency and there's no wasm entry.",
+      "reason": "Reworded as the plan: there is no wasm entry yet; TRU-12 adds it with ehttp behind a target_arch cfg."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Verify round 1: AC-7 names the cluster, but the server has no cluster source yet (it comes with TRU-14), so that part couldn't be tested."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
