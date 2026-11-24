@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   pr-review:
-    uses: bbooth/agentic-sdlc/.github/workflows/pr-review.yaml@5ae2430aed21feb303a34dafd724c2e39c85e06a
+    uses: bbooth/agentic-sdlc/.github/workflows/pr-review.yaml@4bf7cd9f96a7fedfb5fb5d489f937fca38d2242a
     with:
-      sdlc-ref: 5ae2430aed21feb303a34dafd724c2e39c85e06a
+      sdlc-ref: 4bf7cd9f96a7fedfb5fb5d489f937fca38d2242a
       runner: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
