@@ -3,16 +3,24 @@
 
 use board_api::Gate;
 
-/// The gates in pipeline order: the record file's key and the name the gate prints.
+/// The gates in pipeline order: the record file's key and the name the gate
+/// prints. The owner's decisions print as `Spec approval` and so on.
 #[rustfmt::skip]
-const GATES: [(&str, &str); 8] = [
-    ("spec", "Spec"), ("plan", "Plan"), ("build", "Build"), ("verify", "Verify"),
+const GATES: [(&str, &str); 9] = [
+    ("intake", "Intake"), ("spec", "Spec"), ("plan", "Plan"), ("build", "Build"), ("verify", "Verify"),
     ("adversarial_review", "Adversarial review"), ("pr_review", "PR review"),
     ("rollout", "Rollout"), ("outcome", "Outcome"),
 ];
 
+/// An owner's approval comes right after the gate it approves.
 pub fn order(stage: &str) -> usize {
-    GATES.iter().position(|(_, name)| *name == stage).unwrap_or(0)
+    let (name, approval) = stage.strip_suffix(" approval").map_or((stage, 0), |s| (s, 1));
+    GATES.iter().position(|(_, n)| *n == name).map_or(0, |i| 2 * i + approval)
+}
+
+fn known(stage: &str) -> bool {
+    let name = stage.strip_suffix(" approval").unwrap_or(stage);
+    GATES.iter().any(|(_, n)| *n == name)
 }
 
 /// The latest gate: the furthest stage, then the highest round there.
@@ -33,7 +41,7 @@ pub fn from_comment(body: &str) -> Vec<Gate> {
         let (stage, rest) = line.trim().strip_prefix("### Gate: ")?.split_once(" (")?;
         let (result, rest) = rest.split_once(')')?;
         let round = rest.trim().strip_prefix("· round ")?.trim().parse().ok()?;
-        GATES.iter().any(|(_, n)| *n == stage).then(|| Gate { stage: stage.into(), round, pass: result == "pass" })
+        known(stage).then(|| Gate { stage: stage.into(), round, pass: result == "pass" })
     };
     body.lines().filter_map(gate).collect()
 }

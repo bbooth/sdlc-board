@@ -86,14 +86,21 @@ async fn a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr
         issue("TRU-6", "### Gate: PR review (pass) · round 1\n- Checks: ..."),
         issue("TRU-7", "### Gate: Build (fail) · round 3"),
         issue("TRU-8", "No gate here"),
+        // The owner sent the PR back after its review passed.
+        issue("TRU-9", "### Gate: PR review (pass) · round 1\n\n### Gate: PR review approval (fail) · round 1"),
+        issue("TRU-10", "### Gate: Spec approval (pass) · round 1\n### Gate: Spec (pass) · round 2"),
     ];
     let cols = board::columns(&issues, &prs);
     let tickets = &cols.iter().find(|c| c.stage == "PR review").unwrap().tickets;
+    let card = |id: &str| tickets.iter().find(|t| t.id == id).unwrap();
 
     // TRU-6: the comment's PR review beats the branch's Adversarial review.
-    assert_eq!(tickets[0].gate, Some(gate("PR review", 1, true)));
-    assert_eq!(tickets[0].pr.as_ref().map(|p| (p.number, p.checks)), Some((1, Checks::Pass)));
-    assert_eq!(tickets[1].gate, Some(gate("Build", 3, false)));
-    assert_eq!(tickets[2].gate, None);
-    assert_eq!(tickets[2].pr.as_ref().unwrap().checks, Checks::Pending);
+    assert_eq!(card("TRU-6").gate, Some(gate("PR review", 1, true)));
+    assert_eq!(card("TRU-6").pr.as_ref().map(|p| (p.number, p.checks)), Some((1, Checks::Pass)));
+    assert_eq!(card("TRU-7").gate, Some(gate("Build", 3, false)));
+    assert_eq!(card("TRU-8").gate, None);
+    assert_eq!(card("TRU-8").pr.as_ref().unwrap().checks, Checks::Pending);
+    // An owner's decision comes after the gate it decides on.
+    assert_eq!(card("TRU-9").gate, Some(gate("PR review approval", 1, false)));
+    assert_eq!(card("TRU-10").gate, Some(gate("Spec approval", 1, true)));
 }
