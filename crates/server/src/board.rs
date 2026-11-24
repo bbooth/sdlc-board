@@ -61,9 +61,9 @@ fn nest(issue: &Issue, children: &HashMap<&str, Vec<&Issue>>, prs: &[PrInfo]) ->
     }
 }
 
-/// The ticket's PR: the one on a branch that names it, else any that does.
+/// The ticket's PR: the newest on a branch that names it, else the newest that names it.
 fn pr_for<'a>(prs: &'a [PrInfo], id: &str) -> Option<&'a PrInfo> {
-    prs.iter().filter(|p| p.ticket == id).max_by_key(|p| p.by_branch)
+    prs.iter().filter(|p| p.ticket == id).max_by_key(|p| (p.by_branch, p.pr.number))
 }
 
 /// What waits on the owner: specs to approve, PRs in PR review whose checks
