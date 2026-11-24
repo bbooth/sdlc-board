@@ -1,0 +1,118 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-10",
+  "round": 2,
+  "result": "fail",
+  "recorded_at": "2026-11-24T04:44:47.141Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "038d08e",
+    "build_record": ".sdlc/records/TRU-10/build-2.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/build-2.json says pass at 3f113e3"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 3f113e3"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 038d08e"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 038d08e"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-2, AC-3"
+    },
+    {
+      "name": "criteria_met",
+      "pass": false,
+      "detail": "AC-3 is not_met (In the realistic overlap, the card shows the right PR and gate: with #48 and #49 open, TRU-6's card shows 'Rollout round 1: pass' (from its real Linear comments) and 'PR #49 checks pass'. That is luck of ordering. A PR is now tied to the first ticket ID in its body as well as its title, and the card takes the first tied PR in GitHub's list order (newest first). Round 1's method served all of booking's real merged PRs as open, and the ticket's own e2e ('a merged pipeline PR and TRU-6's records show on its card') fails under it. TRU-6's card showed PR #52 'Add the PR review stage to the ticket pipeline' (infra/sdlc-pr-review-stage) instead of its pipeline PR #49. TRU-7's card showed #56 'Let the rollout watch be run by hand...' instead of #53. Both were tied only because their bodies mention the ticket in passing. So whether a card shows its own PR depends on whether a newer PR has mentioned the ticket. The unit tests pass and fail against round-1 code, but they never have two PRs naming the same ticket.)"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "9 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "4 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": false,
+      "detail": "crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner failed:    | |    = note: all struct fields are already assigned |  | Some errors have detailed explanations: E0432, E0560. | For more information about an error, try `rustc --explain E0432`. | error: could not compile `board-server` (lib) due to 6 previous errors"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": false,
+      "detail": "crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read failed:    | |    = note: all struct fields are already assigned |  | Some errors have detailed explanations: E0432, E0560. | For more information about an error, try `rustc --explain E0432`. | error: could not compile `board-server` (lib) due to 6 previous errors"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": false,
+      "detail": "crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr failed:    | |    = note: all struct fields are already assigned |  | Some errors have detailed explanations: E0432, E0560. | For more information about an error, try `rustc --explain E0432`. | error: could not compile `board-server` (lib) due to 6 previous errors"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "1 open: crates/server/src/github.rs:56 together with crates/server/src/board.rs:52. A PR is tied to the first TRU-ID found in its title or else its body, and nest() shows prs.iter().find(), the first such PR. bbooth/booking's infra and ci PRs mention tickets in passing in their bodies ('Found while opening TRU-6's PR', 'Run against TRU-6's real PR head'). Observed with real merged PRs served as open: TRU-6's card showed #52 instead of its pipeline PR #49, and TRU-7's card showed #56 instead of #53. The ticket's own e2e therefore fails on real data. Possible fixes: rank title matches (or a branch naming the ticket) above body matches, or require the body to name only that ticket. No test covers two PRs naming one ticket."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:56 together with crates/server/src/board.rs:52. A PR is tied to the first TRU-ID found in its title or else its body, and nest() shows prs.iter().find(), the first such PR. bbooth/booking's infra and ci PRs mention tickets in passing in their bodies ('Found while opening TRU-6's PR', 'Run against TRU-6's real PR head'). Observed with real merged PRs served as open: TRU-6's card showed #52 instead of its pipeline PR #49, and TRU-7's card showed #56 instead of #53. The ticket's own e2e therefore fails on real data. Possible fixes: rank title matches (or a branch naming the ticket) above body matches, or require the body to name only that ticket. No test covers two PRs naming one ticket."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/board.rs:76 needs_you emits one 'merge' item per green PR tied to a ticket in PR review, so body-only mentions turn into mislabelled items. Observed with real #48 and #49, which were open together on 2026-11-22: the list showed 'Merge: TRU-6 Run CI again when a PR's labels change' (#48, a ci PR that only mentions TRU-6) alongside TRU-6's real PR #49."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:100 still reads only check-runs, as round 1 noted: a PR with no check runs, or with only commit statuses, stays 'pending' and never reaches Needs you. Not re-tested this round because no real PR here lacks check runs; read in the code."
+    }
+  ],
+  "decision": "Back to Build: fix, pass the Build gate again, then re-verify",
+  "evidence": [
+    "AC-2 test crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner: PASS at 038d08e. Run in a worktree at aefa4a6 (round-1 code) with this test file, it FAILs: the list also has ('merge','TRU-12',.../pull/5).",
+    "AC-2 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS, run as part of cargo test --workspace. cargo fmt --check and clippy -D warnings are also clean.",
+    "AC-2 e2e GET /v1/snapshot from board-server (real Linear with stages relabelled by the proxy; real GitHub serving merged #48 and #49 as open): needs_you is: approve TRU-5 (linear.app/trulinc/issue/TRU-5/...), merge TRU-6 #49 (github.com/bbooth/booking/pull/49, checks pass), merge TRU-6 #48 'Run CI again when a PR's labels change', blocked TRU-7 (linear URL). TRU-7's #53 was not served. In the earlier run that served all merged PRs, TRU-7's green PRs were left out of merge because TRU-7 is Blocked, not in PR review.",
+    "AC-2 e2e board-app under Xvfb with BOARD_URL pointing at that server; screenshot /tmp/claude-0/-home-user/98104b15-8b34-5886-b846-3f778f48a384/scratchpad/verify2-tru10/app-realistic.png: A 'Needs you (4)' box above the column headers lists 'Approve the spec: TRU-5 ...', 'Merge: TRU-6 Drop Tenant.display_name ... (TRU-6)', 'Merge: TRU-6 Run CI again when a PR's labels change' and 'Blocked: TRU-7 ...', each drawn as a hyperlink.",
+    "AC-3 test crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read: PASS at 038d08e. FAILs at aefa4a6 with this test file: left [(TRU-6,1,Pass)], right adds (TRU-7,2,Fail) and (TRU-8,3,Pending).",
+    "AC-3 test crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr: PASS at 038d08e. FAILs at aefa4a6 (panics at github.rs:106, TRU-7/TRU-8 card lookup).",
+    "AC-3 e2e GET /v1/snapshot, GitHub proxy serving all of bbooth/booking's merged PRs that name a TRU ID as open (round 1's method), real check-runs and real .sdlc/records: github source prs=13. TRU-6 card pr={number:52, title:'Add the PR review stage to the ticket pipeline', checks:pass}. TRU-7 card pr={number:56}. TRU-5 card pr={number:54}. needs_you had 8 'merge TRU-6' items (#45 to #52); only #49 is TRU-6's PR.",
+    "AC-3 e2e GET /v1/snapshot with only #48 and #49 served as open (they were open together for real): TRU-6 card: gate Rollout round 1 pass, pr #49 checks pass. The real branch record reads succeeded (e.g. contents/.sdlc/records/TRU-6/adversarial_review-1.json?ref=backend/tru-6-drop-tenant-fields returned 200).",
+    "AC-3 e2e board-app screenshot /tmp/claude-0/-home-user/98104b15-8b34-5886-b846-3f778f48a384/scratchpad/verify2-tru10/app-realistic.png: TRU-6's row under TRU-5 shows 'Rollout round 1: pass' and the link 'PR #49 checks pass'. TRU-10's row shows 'Verify round 1: fail', read from the real Linear comments."
+  ]
+}
