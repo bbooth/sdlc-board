@@ -6,12 +6,15 @@ use std::time::Duration;
 
 pub const ENDPOINT: &str = "https://api.github.com";
 
-/// An open PR, tied to the ticket its title (or else its body) names.
+/// An open PR, tied to the ticket its branch (or else its title) names.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrInfo {
     pub ticket: String,
     pub pr: Pr,
     pub draft: bool,
+    /// The branch names the ticket, as pipeline branches do (`feat/tru-9-...`).
+    /// A ticket with several PRs shows the one whose branch names it.
+    pub by_branch: bool,
     /// The latest gate record on the PR's branch.
     pub gate: Option<Gate>,
 }
@@ -53,12 +56,10 @@ impl GitHub {
             let pulls = self.get(&format!("{base}/pulls"), &[("state", "open"), ("per_page", "100")]).await?;
             for p in pulls.as_ref().and_then(Value::as_array).into_iter().flatten() {
                 let title = p["title"].as_str().unwrap_or_default();
-                let body = p["body"].as_str().unwrap_or_default();
-                let Some(ticket) = ticket_id(title, &repo.linear_team).or_else(|| ticket_id(body, &repo.linear_team))
-                else {
-                    continue;
-                };
                 let (sha, branch) = (p["head"]["sha"].as_str().unwrap_or(""), p["head"]["ref"].as_str().unwrap_or(""));
+                // A body only mentions tickets in passing, so it ties nothing.
+                let on_branch = ticket_id(&branch.to_ascii_uppercase(), &repo.linear_team);
+                let Some(ticket) = on_branch.clone().or_else(|| ticket_id(title, &repo.linear_team)) else { continue };
                 let runs = self.get(&format!("{base}/commits/{sha}/check-runs"), &[("per_page", "100")]).await?;
                 let gate = self.record(&base, &ticket, branch).await?;
                 let pr = Pr {
@@ -67,7 +68,7 @@ impl GitHub {
                     url: p["html_url"].as_str().unwrap_or_default().into(),
                     checks: checks(runs.as_ref().unwrap_or(&Value::Null)),
                 };
-                out.push(PrInfo { ticket, pr, draft: p["draft"] == true, gate });
+                out.push(PrInfo { ticket, pr, draft: p["draft"] == true, by_branch: on_branch.is_some(), gate });
             }
         }
         Ok(out)
@@ -100,15 +101,15 @@ pub fn checks(runs: &Value) -> Checks {
     }
 }
 
-/// The first ticket ID with the team's key in the text: `TRU-9: Show tickets`
-/// and `Show tickets (TRU-9)` both name TRU-9 when the key is `TRU`.
+/// The first ticket ID with the team's key in the text: `TRU-9: Show tickets`,
+/// `Show tickets (TRU-9)` and `FEAT/TRU-9-SHOW` all name TRU-9 when the key is `TRU`.
 pub fn ticket_id(text: &str, team: &str) -> Option<String> {
-    let words = text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'));
-    words
-        .map(|w| w.trim_matches('-'))
-        .find(|w| {
-            w.split_once('-')
-                .is_some_and(|(key, n)| key == team && !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
-        })
-        .map(String::from)
+    let prefix = format!("{team}-");
+    let word = |c: Option<char>| c.is_some_and(|c| c.is_ascii_alphanumeric());
+    text.match_indices(&prefix).find_map(|(i, _)| {
+        let rest = &text[i + prefix.len()..];
+        let digits = rest.chars().take_while(char::is_ascii_digit).count();
+        let whole = !word(text[..i].chars().last()) && !word(rest[digits..].chars().next());
+        (digits > 0 && whole).then(|| format!("{prefix}{}", &rest[..digits]))
+    })
 }

@@ -17,7 +17,8 @@ fn issue(id: &str, stage: &str, open: bool) -> Issue {
 
 fn pr(ticket: &str, number: u64, checks: Checks, draft: bool) -> PrInfo {
     let url = format!("https://github.com/bbooth/booking/pull/{number}");
-    PrInfo { ticket: ticket.into(), pr: Pr { number, title: format!("{ticket}: pr"), url, checks }, draft, gate: None }
+    let pr = Pr { number, title: format!("{ticket}: pr"), url, checks };
+    PrInfo { ticket: ticket.into(), pr, draft, by_branch: true, gate: None }
 }
 
 #[test]

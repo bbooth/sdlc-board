@@ -48,7 +48,7 @@ fn nest(issue: &Issue, children: &HashMap<&str, Vec<&Issue>>, prs: &[PrInfo]) ->
     let mut kids: Vec<Ticket> =
         children.get(issue.id.as_str()).map(|v| v.iter().map(|c| nest(c, children, prs)).collect()).unwrap_or_default();
     kids.sort_by(|a, b| a.id.cmp(&b.id));
-    let pr = prs.iter().find(|p| p.ticket == issue.id);
+    let pr = pr_for(prs, &issue.id);
     Ticket {
         id: issue.id.clone(),
         title: issue.title.clone(),
@@ -59,6 +59,11 @@ fn nest(issue: &Issue, children: &HashMap<&str, Vec<&Issue>>, prs: &[PrInfo]) ->
         gate: gates::latest(issue.gates.iter().chain(pr.and_then(|p| p.gate.as_ref()))),
         pr: pr.map(|p| p.pr.clone()),
     }
+}
+
+/// The ticket's PR: the one on a branch that names it, else any that does.
+fn pr_for<'a>(prs: &'a [PrInfo], id: &str) -> Option<&'a PrInfo> {
+    prs.iter().filter(|p| p.ticket == id).max_by_key(|p| p.by_branch)
 }
 
 /// What waits on the owner: specs to approve, PRs in PR review whose checks
@@ -73,9 +78,8 @@ pub fn needs_you(issues: &[Issue], prs: &[PrInfo]) -> Vec<NeedsYou> {
     let in_stage = |stage: &'static str| issues.iter().filter(move |i| i.open && i.stage.as_deref() == Some(stage));
     let mut out: Vec<NeedsYou> =
         in_stage("Ready for approval").map(|i| item("approve", &i.id, &i.title, &i.url)).collect();
-    let in_review: Vec<&str> = in_stage("PR review").map(|i| i.id.as_str()).collect();
-    let green =
-        prs.iter().filter(|p| p.pr.checks == Checks::Pass && !p.draft && in_review.contains(&p.ticket.as_str()));
+    let in_review = in_stage("PR review").filter_map(|i| pr_for(prs, &i.id));
+    let green = in_review.filter(|p| p.pr.checks == Checks::Pass && !p.draft);
     out.extend(green.map(|p| item("merge", &p.ticket, &p.pr.title, &p.pr.url)));
     out.extend(in_stage("Blocked").map(|i| item("blocked", &i.id, &i.title, &i.url)));
     out
