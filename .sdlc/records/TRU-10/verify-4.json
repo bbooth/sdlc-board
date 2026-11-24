@@ -1,0 +1,148 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-10",
+  "round": 4,
+  "result": "pass",
+  "recorded_at": "2026-11-24T05:54:17.705Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "3047972",
+    "build_record": ".sdlc/records/TRU-10/build-4.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/build-4.json says pass at fea2c92"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since fea2c92"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 3047972"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 3047972"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-2, AC-3"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "14 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "8 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner passed: cargo test -p board-server --test needs_you"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr passed: cargo test -p board-server --test github"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read passed: cargo test -p board-server --test github checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr passed: cargo test -p board-server --test github a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:a_failed_part_keeps_its_earlier_value_and_marks_the_source passed: cargo test -p board-server --test github a_failed_part_keeps_its_earlier_value_and_marks_the_source"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/linear.rs:open_tickets_land_once_in_their_stage_with_sub_tickets_nested passed: cargo test -p board-server --test linear"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "4 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/sources.rs:144 (refresh) / github.rs prs(): the GitHub source never returns Err, so a read where every repo's PR list failed still sets last_good=now. Observed with both /pulls lists failing: board_source_age_seconds{source=\"github\"} was 8 and the snapshot's last_good was the current time, while all PR data was 36 min old. The app line then reads 'data is 0 min old'. A GitHub outage or rate limit never shows as stale in the age metric or the app, against the metric's own HELP text ('Seconds since the source's last good read')."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:15,117 (RECENT=20): each read re-reads the records folder and the latest file for every recently merged pipeline PR, at an immutable merge commit, so 2 requests per merged PR. When most of the last 20 closed PRs are pipeline PRs, one read of one repo costs about 42 or more requests, and two repos go past GitHub's 60 an hour in a single burst. The interval spacing can't prevent that. Today booking has only 2 tied merged PRs, so it wasn't hit."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/tests/board.rs: gate and PR details are asserted only on sub-ticket rows. Removing the top-level card's details(ui, t) call in crates/app/src/lib.rs leaves every app test passing. The top-level rendering was confirmed only by screenshot (TRU-6/TRU-7 cards in app1.png)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Verification environment: the egress proxy adds a GitHub credential to api.github.com requests (no-token curl gets X-RateLimit-Limit 15000). The server sent no token, but its upstream reads (13 this session) were authenticated, so behaviour under GitHub's real 60-an-hour unauthenticated limit could not be observed live. The 45-an-hour spacing is evidenced by the test and the observed 1120 s/1040 s intervals."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-2 test crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner: PASS. FAILED in a scratch worktree with the checks==Pass filter removed, and again with the !p.pr.merged filter removed",
+    "AC-2 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS. FAILED with the needs_you strip disabled and with the source-error line disabled",
+    "AC-2 test crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr: PASS (all 4). In this test only TRU-6's own green PR #1 is a merge item",
+    "AC-2 e2e GET /v1/snapshot on the HEAD server (real Linear + real GitHub, Stage labels overridden, 3 injected open PRs): needs_you = [approve TRU-11 -> linear.app URL, merge TRU-13 -> github.com/bbooth/booking/pull/9001, blocked TRU-12 -> linear.app URL]. Not listed: pending #9002, fork #9003, merged #53",
+    "AC-2 e2e board-app (HEAD) under Xvfb against that server, screenshot app1.png: A 'Needs you (3)' frame above the Intake..Outcome columns with three hyperlinks: 'Approve the spec: TRU-11 ...', 'Merge: TRU-13 ...', 'Blocked: TRU-12 ...'",
+    "AC-2 e2e cross-version: origin/main board-app against the HEAD server, and the HEAD board-app against the origin/main server: Both render columns and cards with no parse error (old_app_new_server.png, new_app_old_server.png)",
+    "AC-3 test crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read: PASS. FAILED with in-progress counted as pass, with the fork filter removed, with records read at head sha for merged PRs, and with record files ordered by round only",
+    "AC-3 test crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr: PASS. FAILED with gates::latest ordering by round only",
+    "AC-3 test crates/server/tests/github.rs:a_failed_part_keeps_its_earlier_value_and_marks_the_source: PASS. FAILED when kept checks or the kept gate were replaced by Pending/None",
+    "AC-3 test crates/server/tests/linear.rs:open_tickets_land_once_in_their_stage_with_sub_tickets_nested: PASS. FAILED when comment gates were dropped in linear.rs",
+    "AC-3 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS. FAILED when the 'merged' label was removed and when sub-ticket details were not drawn",
+    "AC-3 e2e GET /v1/snapshot, real bbooth/booking merged PR #49 and TRU-6 records at merge commit 851cb27: TRU-6 card: pr {number 49, url https://github.com/bbooth/booking/pull/49, merged true}, gate Rollout 1 pass (from real Linear comments). With the comments stripped: gate Adversarial review 1 pass, from .sdlc/records/TRU-6/adversarial_review-1.json?ref=851cb27",
+    "AC-3 e2e board-app under Xvfb, screenshots app1.png and app2.png: TRU-6 card shows 'Rollout round 1: pass' and link 'PR #49 merged'. TRU-7 shows 'PR #53 merged'. Sub-ticket rows show 'Adversarial review round 1: fail' (TRU-10), 'PR #9001 checks pass' and 'PR #9002 checks pending'. After injected failures, an orange 'github: the last read failed, data is 0 min old: 3 parts kept from earlier reads...' line appears and the cards keep their values",
+    "AC-3 e2e server log: unauthenticated read spacing: WARN 'GITHUB_TOKEN is not set...'. GitHub reads at 05:16:15 (14 requests), 05:34:55 (+1120 s) and 05:52:15 (+1040 s for 13 requests)"
+  ]
+}
