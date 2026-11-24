@@ -1,0 +1,111 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-11",
+  "round": 4,
+  "result": "pass",
+  "recorded_at": "2026-11-24T18:12:48.184Z",
+  "inputs": {
+    "branch": "feat/tru-11-every-repo-refresh",
+    "commit": "3666c2f"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-11-every-repo-refresh"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "22 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "4 test files changed with 6 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "506 lines changed, counting 330 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 3666c2f"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "7 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "Verify round 3 (AC-7): crates/server/src/linear.rs read() stored (0, []) for a repo whose read failed with no earlier tickets, so on the next failure Linear's last good read became 0 ('00:00 UTC, 498761 h ago') and the error claimed it kept earlier tickets.",
+      "reason": "read() now stores a repo's tickets only after a good read, so a never-read project has nothing kept, no as_of, and says '(no earlier tickets)'. New test a_linear_project_that_never_read_has_nothing_to_keep reads three times with the project down from the start; it fails on the old code (checked) and passes now."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Verify round 3: the one-project-failing test and ages_go_by_the_servers_clock each check only one read, so a last_good that moves on the second failure, or a reference time never updated, slips through.",
+      "reason": "one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates now makes two failing reads a second apart and checks last_good stays; ages_go_by_the_servers_clock finishes a second board and a failed read and checks the reference moves only with the board."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Verify rounds 2-3 and task review round 4: crates/server/src/github.rs stored an empty list for a repo whose PR list failed with no earlier entry, so later failures said '(kept its PRs from an earlier read)' with no PRs ever read.",
+      "reason": "GitHub also keeps only good reads now; tests/github.rs reads a missing repo twice and expects '(no earlier PRs)' both times."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Verify round 3 and task review round 4: no test checks a sub-ticket in its parent's repo hides the repo label.",
+      "reason": "sub_tickets_are_drawn_under_their_ticket_with_their_stages asserts the repo 'r' appears once, on the card, though its sub-tickets share it."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Verify rounds 1-3: no test covers the 20 s request deadline or the stale line's wrapping; both were observed live (held connection recovered with no thread or socket growth; the line wraps)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Verify round 1: AC-7 names the cluster, but the server has no cluster source yet (it comes with TRU-14), so that part couldn't be tested."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Verify rounds 1-3: tokenless GitHub reads are ~27 min apart, so checks finishing show within 2 minutes only with GITHUB_TOKEN (STATUS.md says so)."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
