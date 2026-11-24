@@ -19,7 +19,9 @@ impl sources::Source for Fake {
 }
 
 async fn get(state: std::sync::Arc<sources::State>, path: &str) -> String {
-    let resp = routes::router(state).oneshot(Request::get(path).body(Body::empty()).unwrap()).await.unwrap();
+    // /metrics has its own port; the rest is the public router.
+    let app = if path == "/metrics" { routes::metrics_router(state) } else { routes::router(state, None, None) };
+    let resp = app.oneshot(Request::get(path).body(Body::empty()).unwrap()).await.unwrap();
     assert!(resp.status().is_success());
     String::from_utf8(resp.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap()
 }
