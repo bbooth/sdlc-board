@@ -1,5 +1,5 @@
 {
-  "$comment": "What the pipeline's gates know about this repo. Patterns are regular expressions matched against repo-relative paths. Written at onboarding, before any code: the crate paths are the planned layout, not findings.",
+  "$comment": "What the pipeline's gates know about this repo. Patterns are regular expressions matched against repo-relative paths. Written at onboarding, before any code: the crate paths are the planned layout, not findings. The app is native-only until the web build (TRU-12), so its changes need e2e evidence (the app run against a server), not browser evidence, until then.",
   "tracker": { "kind": "linear", "team": "TruLinc", "key": "TRU", "project": "SDLC board" },
   "branchPrefixes": ["feat/", "fix/", "docs/", "infra/", "ci/"],
   "statusFile": "docs/STATUS.md",
@@ -15,8 +15,8 @@
     { "name": "rustfmt", "when": "\\.rs$", "cmd": "rustfmt", "args": ["--check", "--edition", "2021", "{file}"], "cwd": "." }
   ],
   "evidence": {
-    "e2e": ["^crates/server/src/", "^crates/api/src/"],
-    "browser": ["^crates/app/src/"]
+    "e2e": ["^crates/server/src/", "^crates/api/src/", "^crates/app/src/"],
+    "browser": []
   },
   "reviewScopes": [
     { "name": "security", "agent": "review-security", "paths": ["."] },
