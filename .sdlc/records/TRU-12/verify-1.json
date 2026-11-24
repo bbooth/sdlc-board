@@ -1,0 +1,137 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-12",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-24T20:43:04.617Z",
+  "inputs": {
+    "branch": "feat/tru-12-deploy-web-access",
+    "commit": "a2986e2",
+    "build_record": ".sdlc/records/TRU-12/build-2.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-12/build-2.json says pass at 56f7b50"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 56f7b50"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at a2986e2"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged a2986e2"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-8, AC-9"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "13 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "4 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/server/tests/access.rs:a_live_access_token_gets_the_snapshot_and_the_web_build passed: cargo test -p board-server --test access -- --exact a_live_access_token_gets_the_snapshot_and_the_web_build"
+    },
+    {
+      "name": "rerun:AC-9",
+      "pass": true,
+      "detail": "crates/server/tests/access.rs:without_a_live_access_token_nothing_is_served passed: cargo test -p board-server --test access -- --exact without_a_live_access_token_nothing_is_served"
+    },
+    {
+      "name": "rerun:AC-9",
+      "pass": true,
+      "detail": "crates/server/tests/access.rs:an_unknown_key_reads_the_keys_again_at_most_once_a_minute passed: cargo test -p board-server --test access -- --exact an_unknown_key_reads_the_keys_again_at_most_once_a_minute"
+    },
+    {
+      "name": "rerun:AC-9",
+      "pass": true,
+      "detail": "crates/server/tests/access.rs:key_reads_are_counted_and_a_failed_one_is_an_error passed: cargo test -p board-server --test access -- --exact key_reads_are_counted_and_a_failed_one_is_an_error"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "6 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/tests/metrics.rs, access.rs: no test checks that the public router doesn't serve /metrics. With `.route(\"/metrics\", get(metrics))` added to routes::router outside the Access layer, every server test still passes (mutations.log). Live, the public port gave 401 without a token and 404 with one."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/src/main.rs:get: no test covers sending CF-Access-Client-Id/Secret or the one-of-two check; both are in the binary. I saw both work only under Xvfb."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/src/main.rs: when Access refuses the native app (no token or a wrong secret), the app shows 'Couldn't refresh from ...: expected value at line 1 column 1'. That's the login page failing to parse as JSON, and it doesn't say that access was refused (05-app-none.png, 05-app-wrongsecret.png). It's an error, not the board. With real Cloudflare the answer would be a redirect or 403. I didn't observe that."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/access.rs:check: jsonwebtoken's default 60 s exp leeway applies. A token 59 s past exp got 200 and one 65 s past got 401 (leeway.log). That's probably fine, but it isn't written down, and the test's expired token is 120 s old."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "deploy/values.yaml: access.issuer and access.aud are empty. CI's `helm template sdlc-board deploy` fails (exit 1, 'Missing required value'), as the ticket notes say. With them --set, `helm lint` and `helm template` (alpine/helm:3.19.0) pass. They render a NetworkPolicy, ConfigMap, Service, Deployment, HTTPRoute and ServiceMonitor. The rendered board.toml loads in the server. I didn't run kubeconform: its images and downloads are blocked here."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Only the cluster can show these, and I didn't exercise them: Cloudflare's real login and service-token policy, the tunnel and the board.trulinc.com route, the ArgoCD sync, Image Updater's write-back, the GHCR push and pull secret, the ServiceMonitor being picked up, and the NetworkPolicy letting kubelet probes, Traefik and Prometheus through. The Android build is TRU-13. Docker Hub returned 429 twice before the image build ran. The third try ran the cargo build step fresh (147.8 s)."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-8 test crates/server/tests/access.rs:a_live_access_token_gets_the_snapshot_and_the_web_build: PASS",
+    "AC-8 browser Chromium (Playwright, swiftshader) via the stand-in edge at :8443 to board-server; verify1-tru12/03-after-login.png, 04-after-login-35s.png, browser.log, edge.log: after login: index.html, board-app.js, board-app_bg.wasm (application/wasm), /v1/snapshot 200; the board drawn with TRU-8 and its sub-tickets TRU-12/13/14; a second snapshot read 30 s later",
+    "AC-8 browser Chromium via the edge at :8444 to the Docker image sdlc-board:verify12 run --read-only --user 65532; verify1-tru12/ctr-shots/04-after-login-35s.png, browser-ctr.log: the image's web build draws the same board",
+    "AC-8 e2e board-app (release) under Xvfb with BOARD_URL=edge, BOARD_ACCESS_CLIENT_ID/SECRET set; verify1-tru12/05-app-both.png, edge.log: edge: 'forwarded (service-token) 200 1664B'; the app showed the same board as the browser",
+    "AC-8 e2e grep of web/board-app_bg.wasm, web/board-app.js and the native board-app for token names, token prefixes, API hosts and the real LINEAR_API_KEY value; verify1-tru12/tokens.log: 0 hits in all three; the native app's only env vars are BOARD_URL, BOARD_ACCESS_CLIENT_ID, BOARD_ACCESS_CLIENT_SECRET",
+    "AC-9 test crates/server/tests/access.rs:without_a_live_access_token_nothing_is_served: PASS; FAILS with the Access layer not applied, with validate_aud=false, with set_issuer removed, with validate_exp=false, and with /healthz moved behind Access",
+    "AC-9 test crates/server/tests/access.rs:an_unknown_key_reads_the_keys_again_at_most_once_a_minute: PASS; FAILS with may_reread() always true, and with the Access layer not applied",
+    "AC-9 test crates/server/tests/access.rs:key_reads_are_counted_and_a_failed_one_is_an_error: PASS; FAILS with failed key reads observed as successes",
+    "AC-9 browser fresh Chromium context at the stand-in edge, before login; verify1-tru12/01-before-login.png, 02-before-login-snapshot-path.png, browser.log, edge.log: only the login page (text/html) for /, /index.html, /board-app.js, /board-app_bg.wasm, /v1/snapshot; no canvas; nothing forwarded to the server until login",
+    "AC-9 e2e board-app under Xvfb with no credentials, a wrong secret, only the ID, or only the secret; verify1-tru12/05-app-none.png, 05-app-wrongsecret.png, 05-app-idonly.png, 05-app-secretonly.png: an error line and 'No board yet' every time; the one-only cases send no request",
+    "AC-9 e2e curl straight to board-server :8080 with no, empty, expired, wrong-aud, wrong-iss, unknown-kid, HS256, alg=none and no-exp tokens; verify1-tru12/direct.log, leeway.log, paths.log: 401 on /, /index.html, /board-app.js, /board-app_bg.wasm, /v1/snapshot, /metrics; /healthz 200 ok; a valid token gets 200 for all but /metrics (404)",
+    "AC-9 e2e /metrics on :9091 during key rotation and an issuer outage; verify1-tru12/rotation.log, keys-down.log: access_keys reads 1 -> 2 on rotation (a k2 token got 401, then 200 after a minute); with the issuer stopped, errors_total 1 and reads 3; k1 still 200",
+    "AC-9 e2e Docker image built from the sandbox Dockerfile (repo Dockerfile + CA layer), run --read-only --user 65532 --cap-drop ALL; verify1-tru12/container.log, docker-build.log: runs as uid 65532 with a read-only rootfs; 401 without a token on /, the js, the wasm and /v1/snapshot; 200 with one; /healthz 200; /metrics on 9291 only"
+  ]
+}
