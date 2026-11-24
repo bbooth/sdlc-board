@@ -1,0 +1,161 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-9",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-24T03:22:00.093Z",
+  "inputs": {
+    "branch": "feat/tru-9-linear-board",
+    "commit": "24e3c82",
+    "verify_record": ".sdlc/records/TRU-9/verify-2.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-9/verify-2.json says pass at 1e01d6d"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 1e01d6d"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 24e3c82"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read 24e3c82"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, api, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "16 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "1 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "1 blocking findings refuted, 15 minor carried to the PR"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/routes.rs:10: /v1/snapshot and /metrics have no auth check, and the server listens on 0.0.0.0:8080 by default (crates/server/src/main.rs:16). If the owner runs it locally the way docs/STATUS.md describes, anyone on the same network can GET /v1/snapshot and read every configured project's private Linear ticket titles, URLs and source errors. ADR 0001 (docs/adr/0001-snapshot-server-and-egui-app.md) says the server checks Cloudflare Access's signed header itself, so a request that skips Access gets nothing. This ticket's Changes leave that check out and nothing deploys yet (there is no deploy/ directory), so this isn't blocking. It must land before any deploy ticket, though, and until then the default bind should be 127.0.0.1.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:100: the raw reqwest or Linear GraphQL error text goes into SourceStatus.last_error, and every unauthenticated /v1/snapshot caller gets it. That text includes the upstream URL (LINEAR_ENDPOINT can be overridden) and Linear's auth-failure messages. Today that only says the key is bad, not what it is. Once the route is reachable it tells an outsider about the server's upstream and credential state. Serve a fixed category in the snapshot and keep the detail in the log line.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:41: .text() reads the whole Linear response with no size cap; only the 20s timeout bounds it. The endpoint holding the bearer key can be overridden through LINEAR_ENDPOINT. A wrong or hostile endpoint could make the server hold an unbounded body in memory, and it would also receive the LINEAR_API_KEY in the Authorization header. Low risk because the operator sets both.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/routes.rs:12: /healthz is a route the ticket's Changes list doesn't name (it lists only /v1/snapshot and /metrics). It's unauthenticated and returns a constant \"ok\", so it exposes nothing. It's noted only as surface the ticket didn't ask for, though docs/STATUS.md documents it.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/api/src/lib.rs:13: this is still open from round 1. The /v1 snapshot types have no #[serde(default)] on their non-Option fields, and ADR 0001 (/home/user/sdlc-board/docs/adr/0001-snapshot-server-and-egui-app.md) doesn't say how /v1 may change. Suppose TRU-10 adds a required field (for example PRs on Ticket) and a native or Android app built from that branch fetches from a server still on this version. serde_json fails on the missing field, the whole snapshot is rejected, and main.rs:204 shows only \"Couldn't load the board\". An older app against a newer server is fine, because serde ignores unknown fields. Deciding now that new fields are additive with #[serde(default)] keeps /v1 compatible across separately deployed clients.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/board.rs:305: this is still open from round 1. A Stage label that isn't in STAGES (renamed, misspelled or differently cased, e.g. \"PR Review\") is served in /v1/snapshot as stage \"Intake\", the same value as a ticket with no Stage label. No field in the snapshot shows that a label was dropped. A client can't tell a ticket that hasn't entered the pipeline from one whose label the board doesn't recognise, and a sub-ticket labelled that way shows as \"· Intake\".",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/routes.rs:555: GET /v1/snapshot returns 200 with 11 empty columns and sources: [] until the first Linear read finishes, which can take about 40s with the 20s timeout and one retry. A client gets that as a valid empty board, so 'no data yet' looks like a successful 'no tickets'. The app (main.rs:207) never reads sources, so it can't tell the two apart either. Possible fixes: include the configured source with last_good: null from start, or return 503 until the first read finishes.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/board.rs:299 and :308: columns and children are sorted by comparing the identifier strings, so TRU-10 sorts before TRU-9. That order is part of what /v1/snapshot serves and the app draws as is. Once the project passes TRU-9 (TRU-10 to TRU-14 are already planned), tickets show out of numeric order, and a sub-ticket list like TRU-9 / TRU-10 is drawn as TRU-10, TRU-9. Sorting on the team key and then the number would fix it.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:36: when a project still reports hasNextPage after MAX_PAGES (1,000 open tickets), the loop exits and issues() returns Ok with a partial list. refresh() (sources.rs:92-96) then sets last_good, clears last_error and resets board_source_age_seconds. A truncated board looks exactly like a good read, and nothing is logged. A warn, or an Err, when the cap is hit would make it visible. Raised in adversarial_review-1 and still unchanged.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:41: error_for_status() drops the response body. Linear answers a rejected query, a bad key or a rate limit with a 4xx whose reason is in errors[].message. The warn at sources.rs:99 and SourceStatus.last_error therefore record only 'HTTP status client error (400 Bad Request) for url ...', and the operator can't tell an expired key from a schema change. The immediate retry at sources.rs:84 also fires on a 400 that can't succeed.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:80-88: a first attempt that fails and a retry that succeeds is recorded as one successful read. board_source_read_errors_total never counts it, so intermittent Linear failures show up only in the 'retrying' log line, not in the AC-10 error metric. A counter or label for failed attempts would let Prometheus see a flapping source.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:68-71: ages() reports only sources that already have a Part, and the Part is created only when refresh() finishes (sources.rs:90). Until the first Linear read completes or fails (up to about 40s, longer across pages), board_source_age_seconds{source=\"linear\"} and the other board_source_* series don't exist. Meanwhile /healthz (routes.rs:12) says ok and /v1/snapshot serves sources: [] with empty columns. An alert on the age metric can't fire for a read that hangs on startup. This matters once TRU-12 uses /healthz for readiness.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:111: refresh() has no overall deadline. Only each HTTP request has the 20s reqwest timeout, and one read can make 10 pages x repos x 2 attempts of those requests. A slow Linear can stall a read for minutes, and meanwhile reads_total and the duration histogram don't move. The duration buckets stop at 40s (metrics.rs:22), so long reads all land in +Inf.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/main.rs:19: axum::serve has no with_graceful_shutdown and there is no SIGTERM handler. As PID 1 in a container, the process ignores SIGTERM, waits out the grace period and is SIGKILLed, which cuts off in-flight /v1/snapshot requests. Nothing deploys until TRU-12, so this is not blocking here.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/app/src/main.rs:20: the app fetches /v1/snapshot once at startup, then only when someone presses Refresh (line 52). It never polls, and it never shows snapshot.generated_at. Sequence: the owner opens the board and leaves it open, then a ticket's Stage label changes in Linear. The server picks up the change within 60s (sources.rs INTERVAL), but the app keeps drawing the old column for as long as it stays open. Nothing on screen shows how old the data is. This contradicts docs/adr/0001-snapshot-server-and-egui-app.md:11, which says the board is 'at most one interval plus one client refresh old'. That bound needs the client to refresh on its own interval. Calling ctx.request_repaint_after with a timed fetch would fix it, and showing generated_at would make the age visible.",
+      "status": "dismissed",
+      "scope": "web",
+      "reason": "The rule cited doesn't say what the finding claims. ADR 0001:10-11 says the board is 'at most one interval plus one client refresh old'. That measures age from the client's last refresh. It doesn't require the client to refresh on a timer, and the claimed contradiction depends on reading that requirement in. The requirement the finding actually wants is spec AC 'shows the change within 2 minutes without the owner reloading, and shows when its data was last refreshed' (spec.md:46-47). TRU-9 doesn't cover that AC: TRU-9 covers only AC-1 and AC-10. The approved plan assigns this exact work to T-3, not T-1. plan.md:40 lists T-3's changes as \"the app's 30 second refresh, a 'last refreshed' time, and a stale marker per source\". T-3's title (plan.md:35) is 'refresh on its own', and its end-to-end test (plan.md:41) checks a Stage label change showing up without a reload. T-1's change list (plan.md:24) has no client polling or age display. So the code the finding describes matches what T-1's approved plan asks for, and no rule in this diff is broken.",
+      "judged": "refuted"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:58-63: no test covers the loading ('Loading from ...') or error ('Couldn't load the board ...') states, or the Refresh button. crates/app/tests/board.rs renders only board_app::board, and BoardApp lives in the binary where no test can reach it. A regression that leaves a failed fetch as a blank panel, or that drops the URL from the error text, would pass every test.",
+      "status": "open",
+      "scope": "web"
+    }
+  ],
+  "decision": "Open the PR and advance to PR review",
+  "evidence": []
+}
