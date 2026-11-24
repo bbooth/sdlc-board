@@ -3,8 +3,8 @@ use serde::Deserialize;
 /// `board.toml`: the repos the board covers.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
-    #[serde(default = "default_listen")]
-    pub listen: String,
+    /// Where to listen; 0.0.0.0:8080 if unset.
+    pub listen: Option<String>,
     pub repos: Vec<Repo>,
 }
 
@@ -15,10 +15,6 @@ pub struct Repo {
     /// The Linear team key (the ticket prefix) and project its tickets live in.
     pub linear_team: String,
     pub linear_project: String,
-}
-
-fn default_listen() -> String {
-    "0.0.0.0:8080".into()
 }
 
 impl Config {

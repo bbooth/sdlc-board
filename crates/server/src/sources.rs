@@ -53,8 +53,8 @@ impl State {
             generated_at: now(),
             sources: data
                 .iter()
-                .map(|(name, p)| SourceStatus {
-                    name: (*name).into(),
+                .map(|(n, p)| SourceStatus {
+                    name: (*n).into(),
                     last_good: p.last_good,
                     last_error: p.last_error.clone(),
                 })

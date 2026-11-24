@@ -1,7 +1,7 @@
 //! The board app. It only reads the server's snapshot, so no build of it
 //! holds a Linear or GitHub token.
 
-use board_api::{Snapshot, Ticket};
+use board_api::Snapshot;
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 
@@ -57,48 +57,10 @@ impl eframe::App for BoardApp {
         egui::CentralPanel::default().show(ui, |ui| match &latest {
             None => drop(ui.label(format!("Loading from {}…", self.url))),
             Some(Err(e)) => {
-                ui.colored_label(
-                    ui.visuals().error_fg_color,
-                    format!("Couldn't load the board from {}: {e}", self.url),
-                );
+                let msg = format!("Couldn't load the board from {}: {e}", self.url);
+                ui.colored_label(ui.visuals().error_fg_color, msg);
             }
-            Some(Ok(snap)) => {
-                egui::ScrollArea::both().show(ui, |ui| {
-                    ui.horizontal_top(|ui| {
-                        for col in &snap.columns {
-                            ui.vertical(|ui| {
-                                ui.set_width(170.0);
-                                ui.strong(format!("{} ({})", col.stage, col.tickets.len()));
-                                ui.separator();
-                                for t in &col.tickets {
-                                    card(ui, t);
-                                }
-                            });
-                        }
-                    });
-                });
-            }
+            Some(Ok(snap)) => board_app::board(ui, snap),
         });
-    }
-}
-
-fn card(ui: &mut egui::Ui, t: &Ticket) {
-    egui::Frame::group(ui.style()).show(ui, |ui| {
-        ui.set_width(160.0);
-        ui.hyperlink_to(egui::RichText::new(&t.id).strong(), &t.url);
-        ui.label(&t.title);
-        ui.small(&t.repo);
-        children(ui, t, 0);
-    });
-}
-
-fn children(ui: &mut egui::Ui, t: &Ticket, depth: usize) {
-    for c in &t.children {
-        ui.horizontal_wrapped(|ui| {
-            ui.add_space(12.0 * depth as f32);
-            ui.hyperlink_to(&c.id, &c.url);
-            ui.small(format!("· {}", c.stage));
-        });
-        children(ui, c, depth + 1);
     }
 }

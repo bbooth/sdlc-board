@@ -19,12 +19,11 @@ impl Default for Metrics {
     fn default() -> Self {
         let r = Registry::new();
         let s = &["source"];
-        let buckets = vec![0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 40.0];
+        let b = vec![0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 40.0];
         Self {
             reads: counter!("board_source_reads_total", "Reads of each source.", s, r).unwrap(),
             errors: counter!("board_source_read_errors_total", "Reads of each source that failed.", s, r).unwrap(),
-            duration: histogram!("board_source_read_duration_seconds", "Read time, retry included.", s, buckets, r)
-                .unwrap(),
+            duration: histogram!("board_source_read_duration_seconds", "Read time, retry included.", s, b, r).unwrap(),
             age: gauge!("board_source_age_seconds", "Seconds since the source's last good read.", s, r).unwrap(),
             requests: counter!("board_http_requests_total", "HTTP requests.", &["route", "status"], r).unwrap(),
             request_duration: histogram!("board_http_request_duration_seconds", "HTTP time.", &["route"], r).unwrap(),
@@ -37,10 +36,7 @@ impl Metrics {
     pub fn observe(&self, source: &str, secs: f64, ok: bool) {
         self.reads.with_label_values(&[source]).inc();
         // Touch the error counter so it's exported at 0 before the first failure.
-        let errors = self.errors.with_label_values(&[source]);
-        if !ok {
-            errors.inc();
-        }
+        self.errors.with_label_values(&[source]).inc_by(u64::from(!ok));
         self.duration.with_label_values(&[source]).observe(secs);
     }
 

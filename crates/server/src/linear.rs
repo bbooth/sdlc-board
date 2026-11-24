@@ -1,6 +1,6 @@
 use crate::board::Issue;
 use crate::config::Repo;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::time::Duration;
 
 pub const ENDPOINT: &str = "https://api.linear.app/graphql";
@@ -34,25 +34,16 @@ impl Linear {
         for repo in &self.repos {
             let mut after: Option<String> = None;
             for _ in 0..MAX_PAGES {
-                let vars =
-                    serde_json::json!({"team": repo.linear_team, "project": repo.linear_project, "after": after});
-                let resp = self
-                    .client
-                    .post(&self.endpoint)
-                    .header("Authorization", &self.key)
-                    .json(&serde_json::json!({"query": QUERY, "variables": vars}))
-                    .send()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Linear issues for {}: {e}", repo.linear_project))?
-                    .error_for_status()
-                    .map_err(|e| anyhow::anyhow!("Linear issues for {}: {e}", repo.linear_project))?;
-                let body =
-                    resp.text().await.map_err(|e| anyhow::anyhow!("Linear issues for {}: {e}", repo.linear_project))?;
+                let vars = json!({"team": repo.linear_team, "project": repo.linear_project, "after": after});
+                let e = |err: reqwest::Error| anyhow::anyhow!("Linear issues for {}: {err}", repo.linear_project);
+                let req = json!({"query": QUERY, "variables": vars});
+                let resp = self.client.post(&self.endpoint).header("Authorization", &self.key).json(&req);
+                let body = resp.send().await.map_err(e)?.error_for_status().map_err(e)?.text().await.map_err(e)?;
                 let page = parse_page(&body, &repo.name)?;
                 out.extend(page.issues);
-                match page.next {
-                    Some(c) => after = Some(c),
-                    None => break,
+                after = page.next;
+                if after.is_none() {
+                    break;
                 }
             }
         }
