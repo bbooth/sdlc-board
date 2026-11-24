@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-11",
+  "round": 1,
+  "result": "fail",
+  "recorded_at": "2026-11-24T17:14:21.054Z",
+  "inputs": {
+    "branch": "feat/tru-11-every-repo-refresh",
+    "commit": "92629b5",
+    "verify_record": ".sdlc/records/TRU-11/verify-2.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-11/verify-2.json says pass at a1b4681"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since a1b4681"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 92629b5"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read 92629b5"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "5 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "1 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "1 stand: [web] crates/app/src/main.rs:37: the app now fetches with ureq on a std::thread instead of ehttp, and crates/app/src/lib.rs:21 puts std::time::Instant in the shared Reads type. ADR 0001 (docs/adr/0001-snapshot-server-and-egui-app.md) is accepted and says the one eframe app is built for wasm and served by the server, 'fetching with ehttp, which works on all three'. CLAUDE.md also lists wasm as a target for crates/app. In a wasm32 browser build, ureq's blocking sockets and std::thread::spawn don't work, and Instant::now() panics. So the web version of the board can't load at all: its first Reads::start call panics. The diff drops the one fetch path that works in a browser (Cargo.toml and Cargo.lock remove ehttp) and doesn't add an ADR or note that replaces 0001's decision. Fix: keep ehttp for wasm and use ureq only on native via cfg(target_arch), and use a wasm-safe clock (web-time, or egui's ctx.input time) in Reads."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:35: board.toml:8 now gives Linear a second repo (both in team TRU), but Linear still reads the repos as one all-or-nothing read. Two problems follow. (1) If one repo's project query fails (a GraphQL error, a 5xx, a timeout on the 'SDLC board' project), the `?` fails the whole Linear read and the retry repeats both projects. Booking's tickets then stop updating and all of Linear is marked stale, while GitHub (github.rs prs) keeps the healthy repos fresh and marks only the failed one. (2) A wrong or renamed `linear_project` gets an empty `issues` list back, not an error. That repo's tickets silently vanish with no last_error, no error metric, and only a total `issues` count in the 'source read' log, so nobody can tell. 'Adding a third repo needs only a settings change' makes this typo likely. Suggested fix: read Linear per repo, keeping the last data and recording a partial error the way GitHub does, and log or warn the issue count per repo.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/app/src/main.rs:37: the app now fetches with ureq on a std::thread instead of ehttp, and crates/app/src/lib.rs:21 puts std::time::Instant in the shared Reads type. ADR 0001 (docs/adr/0001-snapshot-server-and-egui-app.md) is accepted and says the one eframe app is built for wasm and served by the server, 'fetching with ehttp, which works on all three'. CLAUDE.md also lists wasm as a target for crates/app. In a wasm32 browser build, ureq's blocking sockets and std::thread::spawn don't work, and Instant::now() panics. So the web version of the board can't load at all: its first Reads::start call panics. The diff drops the one fetch path that works in a browser (Cargo.toml and Cargo.lock remove ehttp) and doesn't add an ADR or note that replaces 0001's decision. Fix: keep ehttp for wasm and use ureq only on native via cfg(target_arch), and use a wasm-safe clock (web-time, or egui's ctx.input time) in Reads.",
+      "status": "open",
+      "scope": "web",
+      "reason": "Confirmed, but the finding overstates the harm. No web build exists to break at base or head: main() calls eframe::run_native and there is no wasm entry, so the first Reads::start can't panic today, and Reads only takes an Instant as a parameter. Real part: ADR 0001 (docs/adr/0001-snapshot-server-and-egui-app.md:13-14) is accepted and chooses ehttp because it works on native, wasm and Android. The diff removes ehttp in favour of ureq on std::thread::spawn, neither of which works in a browser, and adds no ADR or note superseding 0001. So it quietly reverses a recorded cross-platform decision and makes the planned wasm target harder: a decision and portability regression, not a broken shipped web build.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:76: if the first snapshot read fails (server down when the app opens), the main panel keeps saying 'Loading from <url>…' while the top bar shows 'Couldn't refresh from <url>: …'. Before this diff it said 'Couldn't load the board'. Now the board claims to be loading while the next attempt is up to 30 s away.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:78: the ages in 'Last refreshed' and in the stale line take the client's wall clock (main.rs passes SystemTime::now()) and subtract the server's last_good. On a device whose clock is off, every source shows the wrong age. A clock that's behind is clamped to '0 s ago' for minutes, so stale data looks fresh. Measuring from snap.generated_at plus the time since the read came back would avoid the skew.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:135: sub-tickets nested under a card show only their id and stage, not their repo. Only the top-level card does (line 120). AC-5 asks for each card to name its repo, and once two repos share the TRU team, a reader can't tell which repo a nested ticket and its PR come from.",
+      "status": "open",
+      "scope": "web"
+    }
+  ],
+  "decision": "Back to Build: fix what stands, then Build, Verify and review again",
+  "evidence": []
+}
