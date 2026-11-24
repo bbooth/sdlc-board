@@ -25,8 +25,10 @@ pub struct Snapshot {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SourceStatus {
     pub name: String,
-    /// Unix seconds of the last read that succeeded, if any has.
+    /// Unix seconds when the oldest data shown was read: the last read that
+    /// succeeded, or older parts of it kept after their reads failed.
     pub last_good: Option<i64>,
+    /// What failed in the last read, in whole or in part.
     pub last_error: Option<String>,
 }
 
@@ -80,6 +82,10 @@ pub enum Checks {
     Pass,
     Fail,
     Pending,
+    /// Not read (its read failed with nothing earlier to keep), or a state
+    /// from a newer server.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

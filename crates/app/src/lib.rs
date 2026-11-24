@@ -11,7 +11,7 @@ pub fn board(ui: &mut egui::Ui, snap: &Snapshot) {
                 Some(t) => format!("data is {} min old", (snap.generated_at - t).max(0) / 60),
                 None => "no data yet".into(),
             };
-            ui.colored_label(ui.visuals().warn_fg_color, format!("{}: the last read failed, {age}: {err}", s.name));
+            ui.colored_label(ui.visuals().warn_fg_color, format!("{}: {age}: {err}", s.name));
         }
     }
     if !snap.needs_you.is_empty() {
@@ -78,6 +78,7 @@ fn details(ui: &mut egui::Ui, t: &Ticket) {
             (_, Checks::Pass) => "checks pass",
             (_, Checks::Fail) => "checks fail",
             (_, Checks::Pending) => "checks pending",
+            (_, Checks::Unknown) => "checks unknown",
         };
         ui.hyperlink_to(format!("PR #{} {state}", pr.number), &pr.url);
     }

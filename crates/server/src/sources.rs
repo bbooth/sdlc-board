@@ -25,6 +25,8 @@ pub struct Read {
     pub prs: Vec<PrInfo>,
     /// What failed in a read that still returned data, shown as the source's error.
     pub partial: Option<String>,
+    /// When the oldest data in the read was read, if older than the read.
+    pub as_of: Option<i64>,
 }
 
 impl Source for crate::linear::Linear {
@@ -49,9 +51,9 @@ impl Source for crate::github::GitHub {
         if let (0, [first, ..]) = (read.repos_read, read.errors.as_slice()) {
             anyhow::bail!("no repo's PRs could be read, first: {first}");
         }
-        let partial =
-            read.errors.first().map(|e| format!("{} parts kept from earlier reads, first: {e}", read.errors.len()));
-        Ok(Read { prs: read.prs, partial, ..Read::default() })
+        let partial = read.errors.first().map(|e| format!("{} reads failed, first: {e}", read.errors.len()));
+        let as_of = read.prs.iter().map(|p| p.read_at).min();
+        Ok(Read { prs: read.prs, partial, as_of, ..Read::default() })
     }
 }
 
@@ -126,7 +128,7 @@ pub async fn refresh<S: Source>(state: &State, source: &S) {
         Ok(read) => {
             let (issues, prs) = (read.issues.len(), read.prs.len());
             tracing::info!(source = name, issues, prs, partial = read.partial, duration_s = secs, "source read");
-            part.last_good = Some(now());
+            part.last_good = Some(read.as_of.map_or(now(), |t| t.min(now())));
             part.last_error = read.partial.clone();
             part.read = read;
         }

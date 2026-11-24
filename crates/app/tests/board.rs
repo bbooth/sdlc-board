@@ -1,4 +1,4 @@
-use board_api::Snapshot;
+use board_api::{Checks, Pr, Snapshot};
 use egui_kittest::{kittest::Queryable, Harness};
 
 const SNAPSHOT: &str = r#"{"generated_at": 0, "sources": [], "columns": [{"stage": "Spec", "tickets": []}, {"stage": "Build",
@@ -54,7 +54,14 @@ fn needs_you_is_listed_first_and_cards_show_their_gate_and_pr() {
     harness.get_by_label("Adversarial review round 2: pass");
     harness.get_by_label("PR #4 checks pending");
     harness.get_by_label("PR #2 merged");
-    let stale = "github: the last read failed, data is 10 min old: GitHub /repos/b/s/pulls: 403 rate limited";
+    let stale = "github: data is 10 min old: GitHub /repos/b/s/pulls: 403 rate limited";
     assert!(top(stale) < column);
-    assert!(harness.query_by_label_contains("linear: the last read failed").is_none());
+    assert!(harness.query_by_label_contains("linear: ").is_none());
+}
+
+// A check state from a newer server reads as unknown rather than failing the whole snapshot.
+#[test]
+fn an_unknown_check_state_reads_as_unknown() {
+    let pr: Pr = serde_json::from_str(r#"{"number": 1, "title": "t", "url": "u", "checks": "neutral"}"#).unwrap();
+    assert_eq!(pr.checks, Checks::Unknown);
 }

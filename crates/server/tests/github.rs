@@ -1,17 +1,24 @@
 use axum::extract::{Path, Query};
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use board_api::{Checks, Gate};
-use board_server::{board, config::Repo, github::GitHub, sources};
+use board_server::{
+    board,
+    config::Repo,
+    github::{GitHub, PrRead},
+    sources,
+};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
 use std::sync::Arc;
 use std::time::Duration;
 
-/// The fake answers as recorded, fails every check and record call, or fails the PR lists.
+/// The fake answers as recorded, or with any of: every check and record call
+/// failing, the PR lists failing, #1 pushed to a new commit.
 const OK: u8 = 0;
 const PARTS_FAIL: u8 = 1;
 const LISTS_FAIL: u8 = 2;
+const MOVED: u8 = 4;
 
 // Recorded shapes of GitHub's REST responses, trimmed to the fields the board reads.
 async fn fake_github() -> (String, Arc<AtomicU8>) {
@@ -44,13 +51,18 @@ async fn fake_github() -> (String, Arc<AtomicU8>) {
     merged["merged_at"] = json!("2026-11-24T00:00:00Z");
     let closed = json!([pr(10, "TRU-12: Abandoned", "feat/tru-12-old", ""), merged]);
     let pulls = move |Query(q): Query<HashMap<String, String>>| async move {
-        if m1.load(Relaxed) == LISTS_FAIL {
+        let mode = m1.load(Relaxed);
+        if mode & LISTS_FAIL != 0 {
             return StatusCode::FORBIDDEN.into_response();
+        }
+        let mut open = open;
+        if mode & MOVED != 0 {
+            open[7]["head"]["sha"] = json!("sha1b");
         }
         Json(if q.get("state").map(String::as_str) == Some("closed") { closed } else { open }).into_response()
     };
     let runs = move |sha: String| {
-        if m2.load(Relaxed) == PARTS_FAIL {
+        if m2.load(Relaxed) & PARTS_FAIL != 0 {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
         let run = |status: &str, conclusion: Value| json!({"status": status, "conclusion": conclusion});
@@ -63,7 +75,7 @@ async fn fake_github() -> (String, Arc<AtomicU8>) {
         Json(json!({ "total_count": runs.len(), "check_runs": runs })).into_response()
     };
     let contents = move |Path(path): Path<String>, Query(q): Query<HashMap<String, String>>| async move {
-        if m3.load(Relaxed) == PARTS_FAIL {
+        if m3.load(Relaxed) & PARTS_FAIL != 0 {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
         let names = ["build-1.json", "verify-1.json", "verify-2.json", "adversarial_review-1.json", "notes.txt"];
@@ -107,7 +119,7 @@ async fn checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read() {
     // The fork's #7, #5 (named only in its body), #4 and the unmerged #10 are
     // left out; #8 is kept though its reads failed.
     let tied = [
-        ("TRU-9", 8, Checks::Pending, false),
+        ("TRU-9", 8, Checks::Unknown, false),
         ("TRU-6", 6, Checks::Pass, false),
         ("TRU-8", 3, Checks::Pending, false),
         ("TRU-7", 2, Checks::Fail, false),
@@ -167,27 +179,38 @@ async fn a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr
     assert_eq!(merges, ["https://github.com/bbooth/booking/pull/1"]);
 }
 
-// A PR's failed reads keep the last read's values, and the source reports them.
+// A failed checks read keeps the last value for the same commit, and the
+// source reports it with the age of the oldest data it kept.
 #[tokio::test]
 async fn a_failed_part_keeps_its_earlier_value_and_marks_the_source() {
     let (url, mode) = fake_github().await;
     let github = GitHub::new(&url, None, vec![repo()]).unwrap();
+    let pr = |read: &PrRead, n: u64| read.prs.iter().find(|p| p.pr.number == n).unwrap().clone();
     let first = github.prs().await;
     assert!(first.errors.iter().all(|e| e.starts_with("PR #8 ")), "{:?}", first.errors);
+    tokio::time::sleep(Duration::from_millis(1100)).await;
 
     mode.store(PARTS_FAIL, Relaxed);
     let second = github.prs().await;
-    let pr1 = second.prs.iter().find(|p| p.pr.number == 1).unwrap();
+    // #1's records at its commit were read already, so they aren't read again.
+    let pr1 = pr(&second, 1);
     assert_eq!((pr1.pr.checks, pr1.gate.clone()), (Checks::Pass, Some(gate("Adversarial review", 1, false))));
+    assert_eq!(pr1.read_at, pr(&first, 1).read_at);
+    assert!(pr1.read_at < sources::now());
     // #8 had nothing to keep.
-    let pr8 = second.prs.iter().find(|p| p.pr.number == 8).unwrap();
-    assert_eq!((pr8.pr.checks, pr8.gate.clone()), (Checks::Pending, None));
-    assert!(second.errors.iter().any(|e| e.starts_with("PR #1 checks: ")), "{:?}", second.errors);
+    assert_eq!((pr(&second, 8).pr.checks, pr(&second, 8).gate), (Checks::Unknown, None));
+    let kept = |e: &String| e.starts_with("PR #1 checks: ") && e.ends_with("(kept an earlier read)");
+    assert!(second.errors.iter().any(kept), "{:?}", second.errors);
+
+    // After a push, the old commit's checks say nothing about the new one.
+    mode.store(PARTS_FAIL | MOVED, Relaxed);
+    let moved = github.prs().await;
+    assert_eq!((pr(&moved, 1).pr.checks, pr(&moved, 1).gate), (Checks::Unknown, None));
 
     mode.store(LISTS_FAIL, Relaxed);
     let third = github.prs().await;
-    assert_eq!(third.prs, second.prs);
-    assert_eq!(third.errors.len(), 1);
+    assert_eq!(third.prs, moved.prs);
+    assert!(third.errors[0].ends_with("(kept its PRs from an earlier read)"), "{:?}", third.errors);
 
     // With no PR list read the read fails, so the source's data doesn't look new.
     let state = sources::State::new();
@@ -195,18 +218,17 @@ async fn a_failed_part_keeps_its_earlier_value_and_marks_the_source() {
     sources::refresh(&state, &github).await;
     assert_eq!(status().last_good, None);
     assert!(status().last_error.unwrap().starts_with("no repo's PRs could be read"));
-    mode.store(PARTS_FAIL, Relaxed);
+    // A partial read is as old as the oldest data it kept: #6's checks from the first read.
+    mode.store(PARTS_FAIL | MOVED, Relaxed);
     sources::refresh(&state, &github).await;
-    assert!(status().last_good.is_some());
-    assert!(status().last_error.unwrap().contains("parts kept from earlier reads"));
+    assert_eq!(status().last_good, Some(pr(&first, 6).read_at));
+    assert!(status().last_error.unwrap().contains("reads failed, first: "));
 
     // A repo that isn't there is an error, not a repo with no PRs.
     let gone = Repo { name: "bbooth/gone".into(), ..repo() };
     let read = GitHub::new(&url, None, vec![gone]).unwrap().prs().await;
-    assert_eq!(
-        (read.repos_read, read.errors.as_slice()),
-        (0, ["GitHub /repos/bbooth/gone/pulls: not found".to_string()].as_slice())
-    );
+    let error = "GitHub /repos/bbooth/gone/pulls: not found (no earlier PRs)".to_string();
+    assert_eq!((read.repos_read, read.errors.as_slice()), (0, [error].as_slice()));
 }
 
 // Without a token the next read waits long enough for reads like the last
@@ -221,4 +243,15 @@ async fn without_a_token_reads_are_spaced_by_what_they_cost() {
     // for each of the 6 tied PRs, and the 2 latest record files.
     assert_eq!(wait, Duration::from_secs(15 * 3600 / 45));
     assert_eq!(github.interval(), sources::INTERVAL, "the count starts again after each interval");
+
+    // Records at a commit never change, so the next read sends only the
+    // lists, the checks, and #8's records, whose read failed.
+    github.prs().await;
+    assert_eq!(github.interval(), Duration::from_secs(8 * 3600 / 45));
+
+    // One read never sends more than the budget; what it couldn't send is reported.
+    let capped = GitHub::new(&url, None, vec![repo()]).unwrap().with_budget(5);
+    let read = capped.prs().await;
+    assert!(read.errors.iter().any(|e| e.contains("not sent, this read used its 5 requests")), "{:?}", read.errors);
+    assert_eq!(capped.interval(), Duration::from_secs(3600));
 }
