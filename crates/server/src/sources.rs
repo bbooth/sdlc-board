@@ -45,6 +45,10 @@ impl Source for crate::github::GitHub {
     }
     async fn read(&self) -> anyhow::Result<Read> {
         let read = self.prs().await;
+        // Nothing new was read, so the source's data is as old as its last good read.
+        if let (0, [first, ..]) = (read.repos_read, read.errors.as_slice()) {
+            anyhow::bail!("no repo's PRs could be read, first: {first}");
+        }
         let partial =
             read.errors.first().map(|e| format!("{} parts kept from earlier reads, first: {e}", read.errors.len()));
         Ok(Read { prs: read.prs, partial, ..Read::default() })

@@ -189,10 +189,24 @@ async fn a_failed_part_keeps_its_earlier_value_and_marks_the_source() {
     assert_eq!(third.prs, second.prs);
     assert_eq!(third.errors.len(), 1);
 
+    // With no PR list read the read fails, so the source's data doesn't look new.
     let state = sources::State::new();
+    let status = || state.snapshot().sources.into_iter().find(|s| s.name == "github").unwrap();
     sources::refresh(&state, &github).await;
-    let status = state.snapshot().sources.into_iter().find(|s| s.name == "github").unwrap();
-    assert!(status.last_error.unwrap().contains("parts kept from earlier reads"));
+    assert_eq!(status().last_good, None);
+    assert!(status().last_error.unwrap().starts_with("no repo's PRs could be read"));
+    mode.store(PARTS_FAIL, Relaxed);
+    sources::refresh(&state, &github).await;
+    assert!(status().last_good.is_some());
+    assert!(status().last_error.unwrap().contains("parts kept from earlier reads"));
+
+    // A repo that isn't there is an error, not a repo with no PRs.
+    let gone = Repo { name: "bbooth/gone".into(), ..repo() };
+    let read = GitHub::new(&url, None, vec![gone]).unwrap().prs().await;
+    assert_eq!(
+        (read.repos_read, read.errors.as_slice()),
+        (0, ["GitHub /repos/bbooth/gone/pulls: not found".to_string()].as_slice())
+    );
 }
 
 // Without a token the next read waits long enough for reads like the last

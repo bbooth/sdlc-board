@@ -33,6 +33,8 @@ pub struct PrInfo {
 pub struct PrRead {
     pub prs: Vec<PrInfo>,
     pub errors: Vec<String>,
+    /// Repos whose PR lists were read; none means nothing in the read is new.
+    pub repos_read: usize,
 }
 
 /// Reads each repo's PRs, their checks and their gate records.
@@ -89,10 +91,16 @@ impl GitHub {
         for repo in &self.repos {
             let last = self.last.lock().unwrap_or_else(|e| e.into_inner()).get(&repo.name).cloned();
             let prs = self.repo_prs(repo, last.as_deref().unwrap_or_default(), &mut read.errors).await;
-            let prs = prs.unwrap_or_else(|e| {
-                read.errors.push(e.to_string());
-                last.unwrap_or_default()
-            });
+            let prs = match prs {
+                Ok(prs) => {
+                    read.repos_read += 1;
+                    prs
+                }
+                Err(e) => {
+                    read.errors.push(e.to_string());
+                    last.unwrap_or_default()
+                }
+            };
             self.last.lock().unwrap_or_else(|e| e.into_inner()).insert(repo.name.clone(), prs.clone());
             read.prs.extend(prs);
         }
@@ -104,6 +112,8 @@ impl GitHub {
         let open = self.get(&pulls, &[("state", "open"), ("per_page", "100")]).await?;
         let recent = [("state", "closed"), ("sort", "updated"), ("direction", "desc"), ("per_page", RECENT)];
         let closed = self.get(&pulls, &recent).await?;
+        // A repo that isn't there (renamed, or private without a token) is an error, not an empty one.
+        anyhow::ensure!(open.is_some() && closed.is_some(), "GitHub {pulls}: not found");
         let merged = list(&closed).filter(|p| !p["merged_at"].is_null());
         let mut out = Vec::new();
         for p in list(&open).chain(merged) {

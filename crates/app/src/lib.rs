@@ -21,7 +21,9 @@ pub fn board(ui: &mut egui::Ui, snap: &Snapshot) {
                 let what = match n.kind.as_str() {
                     "approve" => "Approve the spec",
                     "merge" => "Merge",
-                    _ => "Blocked",
+                    "blocked" => "Blocked",
+                    // A kind from a newer server: show it as it is rather than mislabel it.
+                    other => other,
                 };
                 ui.hyperlink_to(format!("{what}: {} {}", n.id, n.title), &n.url);
             }
