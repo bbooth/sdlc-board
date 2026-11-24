@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-10",
+  "round": 8,
+  "result": "pass",
+  "recorded_at": "2026-11-24T14:29:18.200Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "096e86b",
+    "build_record": ".sdlc/records/TRU-10/build-8.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/build-8.json says pass at 869f0a5"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 869f0a5"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 096e86b"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 096e86b"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-2, AC-3"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "12 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "6 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner passed: cargo test -p board-server --test needs_you specs_to_approve_green_prs_and_blocked_tickets_need_the_owner"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr passed: cargo test -p board-server --test github a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read passed: cargo test -p board-server --test github checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/linear.rs:open_tickets_land_once_in_their_stage_with_sub_tickets_nested passed: cargo test -p board-server --test linear open_tickets_land_once_in_their_stage_with_sub_tickets_nested"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "4 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/tests/github.rs:85-87: the fixture comment says the times 'compare by value, not as text' within the same second. But with gates.rs:36 changed to take(14), which ignores sub-second digits, all github tests still pass. The 03:00:00Z / 03:00:00.500Z tie falls back to stage order, and stage order also puts Verify above Build. Sub-second ordering is not pinned."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:228: with Ok(read.last().cloned()) in place of Ok(gates::latest(&read)), all github tests still pass, because the latest-by-time record in the fixture (verify-2) is also the last stage in BTreeMap key order. A fixture where the newest record is not alphabetically last would pin record() choosing by time. The e2e run with the injected build-2.json did choose by time."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/gates.rs:35-37: time() keeps only the digits of an RFC 3339 string, so a non-UTC offset (e.g. +01:00) is treated as part of the time and not converted. Every recorded_at and Linear createdAt seen in this session ends in Z, so this was not observed to go wrong."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Verification environment: the egress proxy authenticates api.github.com reads, so GitHub's real anonymous limit could not be observed. The server sent no token. Stage labels were overridden through the Linear proxy. The merge item used real booking PR #53 served as open, and TRU-6's sent-back case used an injected build-2.json record."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-2 test crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner: PASS",
+    "AC-2 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS",
+    "AC-2 e2e GET /v1/snapshot on board-server (real Linear and api.github.com through pass-through proxies, Stage labels overridden, no GITHUB_TOKEN): needs_you = approve TRU-11, merge TRU-7 -> https://github.com/bbooth/booking/pull/53, blocked TRU-12; the pending TRU-13 PR is not listed; all GitHub requests sent without auth",
+    "AC-2 browser board-app (HEAD) under Xvfb against that server: 'Needs you (3)' with Approve the spec TRU-11 / Merge TRU-7 / Blocked TRU-12 links above the columns",
+    "AC-3 test crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr: PASS; FAILS when gates::latest orders by (stage, round), when times compare as text, and when record() keeps the first stage or the lowest round",
+    "AC-3 test crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read: PASS; FAILS under the same mutations; still PASSES when record() returns the last stage in BTreeMap order",
+    "AC-3 test crates/server/tests/linear.rs:open_tickets_land_once_in_their_stage_with_sub_tickets_nested: PASS; FAILS when createdAt is not passed to gates::from_comment",
+    "AC-3 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS",
+    "AC-3 e2e GET /v1/snapshot with real Linear comments: TRU-10 gate {Build, 8, pass, at 2026-11-24T14:13:59.859Z}, not Adversarial review 5 fail; TRU-7 pr #53 checks=pass; TRU-13 pr #9013 checks=pending",
+    "AC-3 e2e GET /v1/snapshot, TRU-6 card from real bbooth/booking records (comments stripped): gate {Adversarial review, 1, pass, at 2026-11-22T21:30:22.268Z} from .sdlc/records/TRU-6?ref=851cb275; pr #49 https://github.com/bbooth/booking/pull/49 checks=pass merged=true",
+    "AC-3 e2e GET /v1/snapshot, TRU-6 with an injected later build-2.json (fail) on top of its real records: gate {Build, 2, fail, at 2026-11-23T00:00:00Z}, with comments stripped and with real comments",
+    "AC-3 browser board-app under Xvfb: TRU-10 'Build round 8: pass'; TRU-7 'Rollout round 1: pass' + 'PR #53 checks pass'; TRU-6 'PR #49 merged'; TRU-13 'PR #9013 checks pending'"
+  ]
+}
