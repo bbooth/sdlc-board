@@ -1,0 +1,157 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-10",
+  "round": 2,
+  "result": "fail",
+  "recorded_at": "2026-11-24T05:57:31.390Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "9e6af2f",
+    "verify_record": ".sdlc/records/TRU-10/verify-4.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/verify-4.json says pass at 3047972"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 3047972"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 9e6af2f"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read 9e6af2f"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, api, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "15 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "2 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "2 stand: [api] crates/server/src/sources.rs:125: GitHub's Source::read (sources.rs:46-50) never returns Err. GitHub::prs falls back to the last data for any repo whose list call fails, so a read in which every request failed still comes back Ok with `partial` set. refresh then sets `last_good = Some(now())` on every such read. Take GitHub being unreachable for two hours (or every request rate-limited with a 403): the snapshot's `SourceStatus.last_good` keeps advancing, the app prints \"github: the last read failed, data is 0 min old\", and `board_source_age_seconds{source=\"github\"}` stays near 0, so nothing about the age shows the data is stale. On a first read while GitHub is down, the snapshot also reports a fresh last_good with no data, where it should report None (\"no data yet\"). This contradicts the documented meaning of `last_good` in crates/api/src/lib.rs:28 (\"the last read that succeeded\") and the gauge's help text (\"Seconds since the source's last good read\"). Either leave last_good alone on reads where nothing new was fetched, or make a read with no successful part an Err.; [operability] crates/server/src/sources.rs:125: GitHub::prs (crates/server/src/github.rs:92) never re"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "/home/user/sdlc-board/crates/server/src/linear.rs:86: comment gates are taken from any comment on a ticket, whoever wrote it. The query (linear.rs:14) fetches only `body` and never the author, and /home/user/sdlc-board/crates/server/src/gates.rs:39 accepts any line starting `### Gate: <known stage> (pass) · round N`, including one quoted or pasted from elsewhere. So any workspace member, or a comment synced in through an integration, can post `### Gate: Outcome (pass) · round 99`, and that becomes the card's latest gate in place of the real record. It only changes what the card shows, not the Needs you list (which is driven by stage labels and PR checks), so it is minor. Possible fix: fetch `user { id }` or `botActor` and keep only comments written by the pipeline's identity.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/sources.rs:125: GitHub's Source::read (sources.rs:46-50) never returns Err. GitHub::prs falls back to the last data for any repo whose list call fails, so a read in which every request failed still comes back Ok with `partial` set. refresh then sets `last_good = Some(now())` on every such read. Take GitHub being unreachable for two hours (or every request rate-limited with a 403): the snapshot's `SourceStatus.last_good` keeps advancing, the app prints \"github: the last read failed, data is 0 min old\", and `board_source_age_seconds{source=\"github\"}` stays near 0, so nothing about the age shows the data is stale. On a first read while GitHub is down, the snapshot also reports a fresh last_good with no data, where it should report None (\"no data yet\"). This contradicts the documented meaning of `last_good` in crates/api/src/lib.rs:28 (\"the last read that succeeded\") and the gauge's help text (\"Seconds since the source's last good read\"). Either leave last_good alone on reads where nothing new was fetched, or make a read with no successful part an Err.",
+      "status": "open",
+      "scope": "api",
+      "reason": "At 9e6af2f, GitHub::prs (github.rs:92-106) returns a PrRead, not a Result: when repo_prs fails, it pushes the error and falls back to `last.unwrap_or_default()`. Source::read for GitHub (sources.rs:46-50) always wraps that in Ok. refresh's Ok arm (sources.rs:122-127) sets `last_good = Some(now())` whatever `partial` says. So a read where every repo failed moves last_good forward, and on a first read it sets last_good with empty data. The app's warning (crates/app/src/lib.rs:10-14) then reads \"data is 0 min old\", and ages() (sources.rs:101) keeps the gauge near 0. The only test with last_good None after a failure (crates/server/tests/metrics.rs:53) uses a Fake source that returns Err. That path never runs for the real GitHub source, so the test doesn't cover this.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:81: every 404 is read as \"nothing here\". That is right for a ticket with no .sdlc/records/ directory, but it also covers the pulls list itself. A private repo read without GITHUB_TOKEN, or a repo renamed in board.toml, returns 404 on /repos/{repo}/pulls, so the source reports success with no PRs and no error. That repo's cards lose their PR and gate, and it never shows as a failed source. A 404 on the pulls list should be an error.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/api/src/lib.rs:79: `Checks` is a closed enum with no `#[serde(other)]` fallback. The compatibility note at lib.rs:55 only covers a new app reading an old server. If a later server adds a check state such as `neutral` or `skipped`, every app built before it fails to parse the whole /v1/snapshot, not just that card. Add an `#[serde(other)] Unknown` variant now, while no released app has the type.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:24: `NeedsYou.kind` is a free string, and the app labels any kind it doesn't know as \"Blocked\". If a later server adds a kind (for example a rollout waiting on the owner), apps built before it show that item as Blocked. Use a neutral label for unknown kinds, or make `kind` an enum with an `other` fallback.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/sources.rs:125: GitHub::prs (crates/server/src/github.rs:92) never returns Err. When a repo's /pulls list fails, it swaps in that repo's last PRs and only adds an entry to errors. So a read where every repo's list fails (GitHub down, a rate-limit 403 with no token, a revoked token) still reaches the Ok arm, and last_good is set to now. What you then see: board_source_age_seconds{source=\"github\"} stays under the interval, and the app's warning line (crates/app/src/lib.rs:10-14) says 'data is 0 min old' while every card's checks and every Merge item are frozen at the last read that worked. The age gauge is the only staleness signal, and its HELP text says 'since the source's last good read'. Verify-4 observed this live (age 8 s with all PR data 36 min old) and left it open as minor. Fix: return Err when no repo's PR list was read, or move last_good only for the repos that were read.",
+      "status": "open",
+      "scope": "operability",
+      "reason": "Same defect as the first finding, and the code bears it out. github.rs:96-100 swaps a failed repo_prs for the last PRs and only records the error. sources.rs:46-50 always returns Ok. sources.rs:125 sets last_good to now on any Ok. ages() (sources.rs:101) and the gauge (metrics.rs:28, help text \"Seconds since the source's last good read.\") are computed from that last_good, so they report fresh data while every card's checks and Merge item are stale. Nothing before refresh turns a read with zero successful repos into an Err, and no test covers that case.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:62-63,105: the no-token spacing only looks back at requests already spent. The first read starts as soon as the pod starts, and every restart or rollout pod does it again, with no budget check. One read costs 2 requests per repo, plus 2 per merged PR among the last 20 closed (RECENT), plus 3 per open PR. So one repo with most of its last 20 closed PRs from the pipeline and about 6 open PRs reaches GitHub's 60 an hour within a single read. The rest of that read gets 403s. On a fresh pod there is no earlier read to fall back on, so those PRs show checks Pending and no gate until the hourly reset. X-RateLimit-Remaining and X-RateLimit-Reset are never read.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:56,109: the requests in a read run one after another. Each has a 20 s timeout, and the read as a whole has no deadline. If GitHub is slow or hanging, one read of N tied PRs can take about (2 + 3N) x 20 s, which is over 10 minutes at N=10. Nothing logs or records progress until the read ends (board_source_read_duration_seconds is only observed at completion), so a stuck read looks the same as an idle interval.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:140: checks come only from the check-runs API. Commit statuses (the older /commits/{sha}/status contexts that some CI and deploy integrations post) and the PR's mergeability (conflicts, required review) are never read. If a repo has a failing or pending status context, its card says 'PR #n checks pass' and board.rs:82 puts it in Needs you as 'Merge', so the owner is sent to merge a PR that GitHub won't let them merge. bbooth/booking uses Actions, which post check runs, so this isn't hit there today.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:24: an unknown needs_you kind is shown as 'Blocked'. kind is a free string and the api crate says later /v1 additions should stay readable by older apps. So if a newer server adds a kind (say a rollout to watch), an older app tells the owner that ticket is blocked. A neutral fallback that shows the raw kind would avoid the wrong label.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:60: every sub-ticket gets a second horizontal_wrapped row for details(), even when it has no gate and no PR. egui gives that row at least one interact height, so each Intake, Spec or Plan child with nothing to show adds a blank line inside its parent's 160px card, and the columns get longer for nothing.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:17: the Needs you frame and the failed-source lines are drawn above the ScrollArea at line 30, outside it. With many items, or on a short window (the app also targets Android), the strip takes the height and the columns get squeezed or pushed off screen. The strip itself can't scroll.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/board.rs:83: a merge item's title is the PR title, which by pipeline convention starts with the ticket ID. The strip then repeats it: 'Merge: TRU-6 TRU-6: fields' (the app test at crates/app/tests/board.rs:168 asserts exactly that). Use the ticket's title, or drop the leading ID.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/tests/board.rs:171: gate and PR details are asserted only on sub-ticket rows. If the details(ui, t) call on a top-level card (crates/app/src/lib.rs:43) is removed, every app test still passes, so AC-3's top-level card rendering has no test that renders it. The verify-4 record notes this too.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:14: the query reads only comments(first: 50) per ticket and parses gate headers from them. A pipeline ticket with more than 50 comments (several gate rounds plus discussion) can drop its latest gate comment, depending on Linear's default comment order, and the card then shows an older round. Branch records cover it only while a PR exists.",
+      "status": "open",
+      "scope": "web"
+    }
+  ],
+  "decision": "Back to Build: fix what stands, then Build, Verify and review again",
+  "evidence": []
+}
