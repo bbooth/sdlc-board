@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-11",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-24T15:26:35.549Z",
+  "inputs": {
+    "branch": "feat/tru-11-every-repo-refresh",
+    "commit": "8263597"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-11-every-repo-refresh"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "9 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "3 test files changed with 4 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "269 lines changed, counting 217 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 8263597"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "6 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/server/src/github.rs:84: AC-6 says a PR's checks finishing shows within 2 minutes, but no test covers that part; without a token reads are spaced 20+ minutes apart and only docs/STATUS.md mentions it.",
+      "reason": "tests/sources.rs with_a_token_finished_checks_show_on_the_next_minutes_read: with a token GitHub's interval is the 60 s INTERVAL, and a check going from in_progress to success shows as pending then pass across two refreshes. Without a token the 2-minute bound can't hold under GitHub's 60 requests an hour; STATUS.md says so, and the deployed server (TRU-12) gets a token."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/app/src/lib.rs:29: 'Last refreshed' used snap.generated_at, so it always read '0 s ago'.",
+      "reason": "It now shows the age of the oldest source's last_good; the app test asserts 'Last refreshed 10 min ago' for a fixture whose github data is 10 minutes old."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/app/src/main.rs:77: Refresh could start a second read while one is in flight, and an older answer could overwrite a newer one.",
+      "reason": "Refresh is disabled while a read is in flight."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/app/src/main.rs:50: keeping the last board on a failed read was untested.",
+      "reason": "Moved into board_app::take, tested by a_failed_read_keeps_the_board_it_had."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/tests/sources.rs:60: no gate record from either repo is asserted, and the app never asserts the card's repo label.",
+      "reason": "The fake serves a record only on sdlc-board's branch and the test asserts TRU-10's card gate; the app fixture's card is in bbooth/sdlc-board and the test asserts that label."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "board.toml:6 (review scope): the local origin/main ref was stale (e202daa), so the diff included TRU-10.",
+      "reason": "Fetched origin main; origin/main is 9e2dbb1 and the diff is TRU-11's files only."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
