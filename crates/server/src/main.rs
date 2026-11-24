@@ -11,8 +11,9 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::load(&path)?;
     // Without Access settings the board would be open to anyone who reaches
     // it, so that takes an explicit opt-out, for a local run only.
+    let state = sources::State::new();
     let access = match (config.access.clone(), std::env::var("BOARD_NO_ACCESS").is_ok_and(|v| v == "1")) {
-        (Some(settings), _) => Some(Arc::new(Access::new(settings)?)),
+        (Some(settings), _) => Some(Arc::new(Access::new(settings)?.observed(state.clone()))),
         (None, true) => {
             tracing::warn!("BOARD_NO_ACCESS=1: serving without checking Cloudflare Access");
             None
@@ -26,7 +27,6 @@ async fn main() -> anyhow::Result<()> {
     }
     let key = std::env::var("LINEAR_API_KEY").map_err(|_| anyhow::anyhow!("LINEAR_API_KEY is not set"))?;
     let endpoint = std::env::var("LINEAR_ENDPOINT").unwrap_or_else(|_| linear::ENDPOINT.into());
-    let state = sources::State::new();
     let linear = linear::Linear::new(&endpoint, &key, config.repos.clone())?;
     tokio::spawn(sources::run(state.clone(), linear));
     let gh_endpoint = std::env::var("GITHUB_ENDPOINT").unwrap_or_else(|_| github::ENDPOINT.into());

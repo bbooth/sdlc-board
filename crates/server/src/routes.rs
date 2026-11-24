@@ -15,7 +15,9 @@ use tower_http::services::ServeDir;
 pub fn router(state: Arc<State>, access: Option<Arc<Access>>, web: Option<PathBuf>) -> Router {
     let mut private = Router::new().route("/v1/snapshot", get(snapshot));
     if let Some(dir) = web {
-        private = private.fallback_service(ServeDir::new(dir));
+        // Routes, not a fallback, so the web build's requests are counted as "/" and "/{*file}".
+        let files = ServeDir::new(dir);
+        private = private.route_service("/", files.clone()).route_service("/{*file}", files);
     }
     if let Some(access) = access {
         private = private.layer(from_fn_with_state(access, require_access));

@@ -50,7 +50,11 @@ fn get(url: String, done: impl FnOnce(Result<Vec<u8>, String>) + Send + 'static)
     // The whole call has a deadline, so a server that never answers can't
     // hold a thread and a socket open (ADR 0001).
     let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(GIVE_UP)).build().into();
-    let token = std::env::var("BOARD_ACCESS_CLIENT_ID").ok().zip(std::env::var("BOARD_ACCESS_CLIENT_SECRET").ok());
+    let (id, secret) = (std::env::var("BOARD_ACCESS_CLIENT_ID").ok(), std::env::var("BOARD_ACCESS_CLIENT_SECRET").ok());
+    if id.is_some() != secret.is_some() {
+        return done(Err("set both BOARD_ACCESS_CLIENT_ID and BOARD_ACCESS_CLIENT_SECRET, or neither".into()));
+    }
+    let token = id.zip(secret);
     std::thread::spawn(move || {
         let mut req = agent.get(&url);
         if let Some((id, secret)) = &token {

@@ -2,9 +2,10 @@
 //! (ADR 0001), so a request that reaches the pod without passing Access,
 //! from inside the cluster say, gets nothing.
 
+use crate::sources::State;
 use jsonwebtoken::{decode, decode_header, jwk::JwkSet, Algorithm, DecodingKey, Validation};
 use serde::Deserialize;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 pub const HEADER: &str = "cf-access-jwt-assertion";
@@ -28,6 +29,8 @@ pub struct Access {
     client: reqwest::Client,
     keys: RwLock<Vec<(String, DecodingKey)>>,
     last_read: RwLock<Option<Instant>>,
+    /// Where key reads are counted, as source `access_keys`.
+    state: Option<Arc<State>>,
 }
 
 #[derive(Deserialize)]
@@ -41,11 +44,33 @@ impl Access {
     /// Reads the signing keys from `certs` instead of Cloudflare, for tests.
     pub fn with_certs(settings: Settings, certs: &str) -> anyhow::Result<Self> {
         let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build()?;
-        Ok(Self { settings, certs: certs.into(), client, keys: RwLock::default(), last_read: RwLock::default() })
+        Ok(Self {
+            settings,
+            certs: certs.into(),
+            client,
+            keys: RwLock::default(),
+            last_read: RwLock::default(),
+            state: None,
+        })
     }
 
-    /// Reads the signing keys; on failure the earlier keys stay.
+    /// Counts key reads in `state`'s metrics: when none work, every request gets 401.
+    pub fn observed(mut self, state: Arc<State>) -> Self {
+        self.state = Some(state);
+        self
+    }
+
+    /// Reads the signing keys, counting the read; on failure the earlier keys stay.
     pub async fn read_keys(&self) -> anyhow::Result<usize> {
+        let started = Instant::now();
+        let read = self.read_keys_once().await;
+        if let Some(s) = &self.state {
+            s.metrics.observe("access_keys", started.elapsed().as_secs_f64(), read.is_ok());
+        }
+        read
+    }
+
+    async fn read_keys_once(&self) -> anyhow::Result<usize> {
         *self.last_read.write().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
         let e = |err: reqwest::Error| anyhow::anyhow!("Access keys from {}: {err}", self.certs);
         let set: JwkSet = self
@@ -68,7 +93,7 @@ impl Access {
     }
 
     /// Reads the keys now and then every [`REFRESH`], or every minute until a read works.
-    pub async fn run(self: std::sync::Arc<Self>) {
+    pub async fn run(self: Arc<Self>) {
         loop {
             let wait = match self.read_keys().await {
                 Ok(n) => {

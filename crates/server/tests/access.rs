@@ -48,12 +48,14 @@ async fn certs() -> (String, Arc<AtomicUsize>) {
 
 async fn board() -> (Router, Arc<AtomicUsize>) {
     let (url, reads) = certs().await;
-    let access = Access::with_certs(Settings { issuer: ISS.into(), aud: AUD.into() }, &url).unwrap();
+    let state = sources::State::new();
+    let access =
+        Access::with_certs(Settings { issuer: ISS.into(), aud: AUD.into() }, &url).unwrap().observed(state.clone());
     access.read_keys().await.unwrap();
     let web = std::env::temp_dir().join(format!("board-web-{}", std::process::id()));
     std::fs::create_dir_all(&web).unwrap();
     std::fs::write(web.join("index.html"), "<canvas id=board></canvas>").unwrap();
-    (routes::router(sources::State::new(), Some(Arc::new(access)), Some(web)), reads)
+    (routes::router(state, Some(Arc::new(access)), Some(web)), reads)
 }
 
 async fn get_with(app: &Router, path: &str, token: Option<&str>) -> (StatusCode, String) {
@@ -108,4 +110,19 @@ async fn an_unknown_key_reads_the_keys_again_at_most_once_a_minute() {
     }
     // The first read was at start; the unknown key came within the minute, so no more.
     assert_eq!(reads.load(Relaxed), 1);
+}
+
+// When Cloudflare's keys can't be read, every request gets 401, so the
+// reads are counted for an alert on their errors.
+#[tokio::test]
+async fn key_reads_are_counted_and_a_failed_one_is_an_error() {
+    let state = sources::State::new();
+    let settings = || Settings { issuer: ISS.into(), aud: AUD.into() };
+    let (url, _) = certs().await;
+    Access::with_certs(settings(), &url).unwrap().observed(state.clone()).read_keys().await.unwrap();
+    let gone = Access::with_certs(settings(), &url.replace("/certs", "/gone")).unwrap().observed(state.clone());
+    assert!(gone.read_keys().await.is_err());
+    let text = state.metrics.render(&[]);
+    assert!(text.contains(r#"board_source_reads_total{source="access_keys"} 2"#), "{text}");
+    assert!(text.contains(r#"board_source_read_errors_total{source="access_keys"} 1"#), "{text}");
 }

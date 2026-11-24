@@ -20,6 +20,7 @@ jobs:
 
   deploy:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
     env:
       KUBECONFORM_VERSION: v0.8.0
     steps:
@@ -31,7 +32,7 @@ jobs:
       - name: Install kubeconform
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
-          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | tar xz -C "$RUNNER_TEMP/bin" kubeconform
+          curl -sSL --max-time 120 "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | tar xz -C "$RUNNER_TEMP/bin" kubeconform
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Validate rendered manifests
         run: |
