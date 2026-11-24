@@ -34,7 +34,14 @@ impl Source for crate::linear::Linear {
         "linear"
     }
     async fn read(&self) -> anyhow::Result<Read> {
-        Ok(Read { issues: self.issues().await?, ..Read::default() })
+        let read = crate::linear::Linear::read(self).await;
+        if let (0, [first, ..]) = (read.repos_read, read.errors.as_slice()) {
+            anyhow::bail!("no repo's tickets could be read, first: {first}");
+        }
+        let partial = read.errors.first().map(|e| {
+            format!("{} of {} repos failed, first: {e}", read.errors.len(), read.errors.len() + read.repos_read)
+        });
+        Ok(Read { issues: read.issues, partial, ..Read::default() })
     }
 }
 

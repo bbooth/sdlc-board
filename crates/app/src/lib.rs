@@ -134,6 +134,10 @@ fn children(ui: &mut egui::Ui, t: &Ticket, depth: usize) {
             ui.add_space(12.0 * depth as f32);
             ui.hyperlink_to(&c.id, &c.url);
             ui.small(format!("· {}", c.stage));
+            // Repos share a Linear team, so a sub-ticket elsewhere says where.
+            if c.repo != t.repo {
+                ui.small(&c.repo);
+            }
         });
         ui.horizontal_wrapped(|ui| {
             ui.add_space(12.0 * (depth + 1) as f32);

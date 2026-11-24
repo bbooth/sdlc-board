@@ -28,14 +28,20 @@ struct Fakes {
     github_down: Arc<AtomicBool>,
     /// Finishes booking's running check.
     checks_done: Arc<AtomicBool>,
+    /// Fails Linear's reads of the SDLC board project only.
+    sdlc_project_down: Arc<AtomicBool>,
 }
 
 /// Linear and GitHub fakes for two repos, booking and sdlc-board, in one Linear team.
 async fn fakes() -> Fakes {
     let flag = || Arc::new(AtomicBool::new(false));
-    let (moved, github_down, checks_done) = (flag(), flag(), flag());
+    let (moved, github_down, checks_done, sdlc_project_down) = (flag(), flag(), flag(), flag());
     let (m, down, down2, done) = (moved.clone(), github_down.clone(), github_down.clone(), checks_done.clone());
+    let sdlc_down = sdlc_project_down.clone();
     let linear = move |Json(req): Json<Value>| async move {
+        if sdlc_down.load(Relaxed) && req["variables"]["project"] == "SDLC board" {
+            return Json(json!({"errors": [{"message": "project unavailable"}]}));
+        }
         let nodes = match req["variables"]["project"].as_str() {
             Some("Booking") => vec![ticket("TRU-6", "PR review")],
             Some("SDLC board") => vec![ticket("TRU-10", if m.load(Relaxed) { "Verify" } else { "Build" })],
@@ -86,7 +92,7 @@ async fn fakes() -> Fakes {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    Fakes { url: format!("http://{addr}"), moved, github_down, checks_done }
+    Fakes { url: format!("http://{addr}"), moved, github_down, checks_done, sdlc_project_down }
 }
 
 fn card<'a>(snap: &'a Snapshot, id: &str) -> &'a Ticket {
@@ -154,7 +160,7 @@ async fn with_a_token_finished_checks_show_on_the_next_minutes_read() {
 // keeps updating.
 #[tokio::test]
 async fn a_failing_source_keeps_its_data_and_the_others_keep_updating() {
-    let Fakes { url, moved, github_down, checks_done } = fakes().await;
+    let Fakes { url, moved, github_down, checks_done, .. } = fakes().await;
     checks_done.store(true, Relaxed);
     let repos = vec![repo("bbooth/booking", "Booking"), repo("bbooth/sdlc-board", "SDLC board")];
     let (linear, github) =
@@ -178,4 +184,25 @@ async fn a_failing_source_keeps_its_data_and_the_others_keep_updating() {
     assert_eq!(card(&snap, "TRU-6").pr, card(&good, "TRU-6").pr);
     assert_eq!(card(&snap, "TRU-6").pr.as_ref().unwrap().checks, Checks::Pass);
     assert_eq!((status("linear").last_error, card(&snap, "TRU-10").stage.as_str()), (None, "Verify"));
+}
+
+// AC-7 within Linear: one repo's project failing keeps that repo's tickets,
+// names the failure, and the other repo's tickets keep updating.
+#[tokio::test]
+async fn one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates() {
+    let f = fakes().await;
+    let repos = vec![repo("bbooth/booking", "Booking"), repo("bbooth/sdlc-board", "SDLC board")];
+    let linear = Linear::new(&format!("{}/graphql", f.url), "k", repos).unwrap();
+    let state = sources::State::new();
+    sources::refresh(&state, &linear).await;
+
+    f.sdlc_project_down.store(true, Relaxed);
+    f.moved.store(true, Relaxed);
+    sources::refresh(&state, &linear).await;
+    let snap = state.snapshot();
+    let error = snap.sources.iter().find(|s| s.name == "linear").unwrap().last_error.clone().unwrap();
+    assert!(error.starts_with("1 of 2 repos failed, first: Linear issues for SDLC board: "), "{error}");
+    assert!(error.ends_with("(kept its tickets from an earlier read)"), "{error}");
+    // TRU-10 kept its earlier stage; booking's TRU-6 is still there.
+    assert_eq!((card(&snap, "TRU-10").stage.as_str(), card(&snap, "TRU-6").stage.as_str()), ("Build", "PR review"));
 }

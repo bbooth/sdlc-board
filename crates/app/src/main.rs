@@ -33,7 +33,8 @@ impl BoardApp {
         let (reads, ctx) = (self.reads.clone(), ctx.clone());
         let url = format!("{}/v1/snapshot", self.url.trim_end_matches('/'));
         // The whole call has a deadline, so a server that never answers can't
-        // hold a thread and a socket open.
+        // hold a thread and a socket open. The web build fetches with ehttp
+        // (ADR 0001); natively ehttp has no deadline before the headers.
         let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(board_app::GIVE_UP)).build().into();
         std::thread::spawn(move || {
             let parsed = agent
@@ -72,9 +73,10 @@ impl eframe::App for BoardApp {
             });
         });
         let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
-        egui::CentralPanel::default().show(ui, |ui| match &snap {
-            None => drop(ui.label(format!("Loading from {}…", self.url))),
-            Some(snap) => board_app::board(ui, snap, now),
+        egui::CentralPanel::default().show(ui, |ui| match (&snap, &problem) {
+            (Some(snap), _) => board_app::board(ui, snap, now),
+            (None, Some(_)) => drop(ui.label("No board yet: the next read is due within 30 s.")),
+            (None, None) => drop(ui.label(format!("Loading from {}…", self.url))),
         });
     }
 }

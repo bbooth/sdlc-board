@@ -23,7 +23,7 @@ const NEEDS_YOU: &str = r#"{"generated_at": 1000, "sources": [{"name": "linear",
   "columns": [{"stage": "Build", "tickets": [
   {"id": "TRU-8", "title": "One board", "url": "u", "repo": "bbooth/sdlc-board", "stage": "Build",
    "gate": {"stage": "Plan", "round": 1, "pass": true}, "children": [
-    {"id": "TRU-9", "title": "a", "url": "u", "repo": "r", "stage": "PR review", "children": [],
+    {"id": "TRU-9", "title": "a", "url": "u", "repo": "bbooth/booking", "stage": "PR review", "children": [],
      "gate": {"stage": "Adversarial review", "round": 2, "pass": true},
      "pr": {"number": 4, "title": "TRU-9: a", "url": "https://github.com/b/s/pull/4", "checks": "pending"}},
     {"id": "TRU-7", "title": "c", "url": "u", "repo": "r", "stage": "Rollout", "children": [],
@@ -61,8 +61,9 @@ fn needs_you_is_listed_first_and_cards_show_their_gate_and_pr() {
     assert!(harness.query_by_label_contains("linear is stale").is_none());
     // AC-6, app side: when each source's data was last refreshed.
     harness.get_by_label("Last refreshed: linear 0 s ago, github 10 min ago");
-    // AC-5, app side: the card names its repo.
+    // AC-5, app side: the card names its repo, and a sub-ticket from another repo names its own.
     harness.get_by_label("bbooth/sdlc-board");
+    harness.get_by_label("bbooth/booking");
 }
 
 // AC-7, app side: a failed read of the snapshot keeps the board it had.

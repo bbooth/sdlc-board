@@ -1,6 +1,8 @@
 use crate::config::Repo;
 use crate::{board::Issue, gates};
 use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Duration;
 
 pub const ENDPOINT: &str = "https://api.linear.app/graphql";
@@ -22,30 +24,77 @@ pub struct Linear {
     endpoint: String,
     key: String,
     repos: Vec<Repo>,
+    /// Each repo's tickets as last read, kept when a later read of that repo fails.
+    last: Mutex<HashMap<String, Vec<Issue>>>,
+}
+
+/// One read's tickets, and the repos whose read failed.
+#[derive(Debug, Default)]
+pub struct IssueRead {
+    pub issues: Vec<Issue>,
+    pub errors: Vec<String>,
+    pub repos_read: usize,
 }
 
 impl Linear {
     pub fn new(endpoint: &str, key: &str, repos: Vec<Repo>) -> anyhow::Result<Self> {
         let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).build()?;
-        Ok(Self { client, endpoint: endpoint.into(), key: key.into(), repos })
+        Ok(Self { client, endpoint: endpoint.into(), key: key.into(), repos, last: Mutex::default() })
     }
 
+    /// Every repo's tickets; fails only when no repo could be read.
     pub async fn issues(&self) -> anyhow::Result<Vec<Issue>> {
-        let mut out = Vec::new();
+        let read = self.read().await;
+        match (read.repos_read, read.errors.first()) {
+            (0, Some(e)) => anyhow::bail!("{e}"),
+            _ => Ok(read.issues),
+        }
+    }
+
+    /// Reads each repo's tickets apart, so one failing project keeps its
+    /// earlier tickets and doesn't stop the others updating.
+    pub async fn read(&self) -> IssueRead {
+        let mut read = IssueRead::default();
         for repo in &self.repos {
-            let mut after: Option<String> = None;
-            for _ in 0..MAX_PAGES {
-                let vars = json!({"team": repo.linear_team, "project": repo.linear_project, "after": after});
-                let e = |err: reqwest::Error| anyhow::anyhow!("Linear issues for {}: {err}", repo.linear_project);
-                let req = json!({"query": QUERY, "variables": vars});
-                let resp = self.client.post(&self.endpoint).header("Authorization", &self.key).json(&req);
-                let body = resp.send().await.map_err(e)?.error_for_status().map_err(e)?.text().await.map_err(e)?;
-                let page = parse_page(&body, &repo.name)?;
-                out.extend(page.issues);
-                after = page.next;
-                if after.is_none() {
-                    break;
+            let last = self.last.lock().unwrap_or_else(|e| e.into_inner()).get(&repo.name).cloned();
+            let issues = match self.repo_issues(repo).await {
+                Ok(issues) => {
+                    read.repos_read += 1;
+                    if issues.is_empty() {
+                        // Also what a misspelt linear_project gets back.
+                        tracing::warn!(repo = %repo.name, project = %repo.linear_project, "no open tickets in the Linear project");
+                    }
+                    issues
                 }
+                Err(e) => {
+                    tracing::warn!(repo = %repo.name, error = %e, "reading the repo's tickets failed");
+                    let kept =
+                        if last.is_some() { "kept its tickets from an earlier read" } else { "no earlier tickets" };
+                    read.errors.push(format!("{e} ({kept})"));
+                    last.unwrap_or_default()
+                }
+            };
+            self.last.lock().unwrap_or_else(|e| e.into_inner()).insert(repo.name.clone(), issues.clone());
+            read.issues.extend(issues);
+        }
+        read
+    }
+
+    async fn repo_issues(&self, repo: &Repo) -> anyhow::Result<Vec<Issue>> {
+        let mut out = Vec::new();
+        let mut after: Option<String> = None;
+        for _ in 0..MAX_PAGES {
+            let vars = json!({"team": repo.linear_team, "project": repo.linear_project, "after": after});
+            let e = |err: reqwest::Error| anyhow::anyhow!("Linear issues for {}: {err}", repo.linear_project);
+            let req = json!({"query": QUERY, "variables": vars});
+            let resp = self.client.post(&self.endpoint).header("Authorization", &self.key).json(&req);
+            let body = resp.send().await.map_err(e)?.error_for_status().map_err(e)?.text().await.map_err(e)?;
+            let page = parse_page(&body, &repo.name)
+                .map_err(|err| anyhow::anyhow!("Linear issues for {}: {err}", repo.linear_project))?;
+            out.extend(page.issues);
+            after = page.next;
+            if after.is_none() {
+                break;
             }
         }
         Ok(out)
