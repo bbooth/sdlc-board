@@ -4,10 +4,7 @@ metadata:
   name: sdlc-board
   namespace: argocd
   annotations:
-    # Read by homelab-infra's shared ImageUpdater, as for booking. :latest
-    # tags, so a new digest marks a new push; each one is committed to
-    # deploy/.argocd-source-sdlc-board.yaml on main with the write-enabled
-    # deploy key in Secret argocd/sdlc-board-image-updater-git.
+    # homelab-infra's ImageUpdater commits each new :latest digest to main, as for booking.
     argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/sdlc-board-image-updater-git
     argocd-image-updater.argoproj.io/git-branch: main
     argocd-image-updater.argoproj.io/image-list: "board=ghcr.io/bbooth/sdlc-board:latest"

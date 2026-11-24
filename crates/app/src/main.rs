@@ -79,7 +79,7 @@ fn get(url: String, done: impl FnOnce(Result<Vec<u8>, String>) + 'static) {
             let window = web_sys::window().ok_or("no window")?;
             let resp: web_sys::Response =
                 JsFuture::from(window.fetch_with_str_and_init(&url, &init)).await.map_err(err)?.unchecked_into();
-            if resp.type_() == web_sys::ResponseType::Opaqueredirect || resp.status() == 401 {
+            if resp.type_() == web_sys::ResponseType::Opaqueredirect {
                 return Err("your Cloudflare Access login has expired: reload the page".into());
             } else if !resp.ok() {
                 return Err(format!("{} {}", resp.status(), resp.status_text()));
