@@ -17,7 +17,9 @@ async fn main() -> anyhow::Result<()> {
             tracing::warn!("BOARD_NO_ACCESS=1: serving without checking Cloudflare Access");
             None
         }
-        (None, false) => anyhow::bail!("{path} has no [access] settings; set BOARD_NO_ACCESS=1 to run without them locally"),
+        (None, false) => {
+            anyhow::bail!("{path} has no [access] settings; set BOARD_NO_ACCESS=1 to run without them locally")
+        }
     };
     if let Some(a) = &access {
         tokio::spawn(a.clone().run());

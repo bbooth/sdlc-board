@@ -1,0 +1,5 @@
+apiVersion: v2
+name: sdlc-board
+description: The SDLC board server and its web build, behind Cloudflare Access.
+type: application
+version: 0.1.0

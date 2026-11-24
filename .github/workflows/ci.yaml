@@ -11,7 +11,71 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy && rustup default stable
+      - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy --target wasm32-unknown-unknown && rustup default stable
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # The web build: what compiles natively may not for the browser.
+      - run: cargo clippy -p board-app --target wasm32-unknown-unknown --locked -- -D warnings
       - run: cargo test --workspace --locked
+
+  deploy:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    env:
+      KUBECONFORM_VERSION: v0.8.0
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.3.0
+      - run: helm lint deploy
+      - name: Install kubeconform
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | tar xz -C "$RUNNER_TEMP/bin" kubeconform
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Validate rendered manifests
+        run: |
+          helm template sdlc-board deploy | kubeconform -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+
+  # Builds the image on every PR, so a broken Dockerfile fails the PR, and
+  # pushes it on main once the other jobs passed.
+  image:
+    needs: [cargo, deploy]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # Image Updater deploys whatever :latest points at, so an older run that
+      # finishes after a newer one must not overwrite it.
+      - name: Decide tags
+        id: tags
+        if: github.ref == 'refs/heads/main'
+        run: |
+          repo="ghcr.io/${{ github.repository_owner }}/sdlc-board"
+          tags="$repo:${{ github.sha }}"
+          git fetch --quiet --depth=1 origin main
+          if [ "$(git rev-parse FETCH_HEAD)" = "${{ github.sha }}" ]; then
+            tags="$tags,$repo:latest"
+          else
+            echo "::notice::main moved on; leaving :latest to that run."
+          fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        if: steps.tags.outputs.tags != ''
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          push: ${{ steps.tags.outputs.tags != '' }}
+          tags: ${{ steps.tags.outputs.tags || 'sdlc-board:ci' }}
+          cache-from: type=gha,scope=board
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,mode=max,scope=board' || '' }}

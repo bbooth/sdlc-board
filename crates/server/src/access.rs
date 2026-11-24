@@ -48,12 +48,19 @@ impl Access {
     pub async fn read_keys(&self) -> anyhow::Result<usize> {
         *self.last_read.write().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
         let e = |err: reqwest::Error| anyhow::anyhow!("Access keys from {}: {err}", self.certs);
-        let set: JwkSet = self.client.get(&self.certs).send().await.map_err(e)?.error_for_status().map_err(e)?.json().await.map_err(e)?;
-        let keys: Vec<_> = set
-            .keys
-            .iter()
-            .filter_map(|k| Some((k.common.key_id.clone()?, DecodingKey::from_jwk(k).ok()?)))
-            .collect();
+        let set: JwkSet = self
+            .client
+            .get(&self.certs)
+            .send()
+            .await
+            .map_err(e)?
+            .error_for_status()
+            .map_err(e)?
+            .json()
+            .await
+            .map_err(e)?;
+        let keys: Vec<_> =
+            set.keys.iter().filter_map(|k| Some((k.common.key_id.clone()?, DecodingKey::from_jwk(k).ok()?))).collect();
         anyhow::ensure!(!keys.is_empty(), "Access keys from {}: none usable", self.certs);
         let n = keys.len();
         *self.keys.write().unwrap_or_else(|e| e.into_inner()) = keys;

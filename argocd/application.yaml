@@ -1,0 +1,34 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sdlc-board
+  namespace: argocd
+  annotations:
+    # Read by homelab-infra's shared ImageUpdater, as for booking. :latest
+    # tags, so a new digest marks a new push; each one is committed to
+    # deploy/.argocd-source-sdlc-board.yaml on main with the write-enabled
+    # deploy key in Secret argocd/sdlc-board-image-updater-git.
+    argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/sdlc-board-image-updater-git
+    argocd-image-updater.argoproj.io/git-branch: main
+    argocd-image-updater.argoproj.io/image-list: "board=ghcr.io/bbooth/sdlc-board:latest"
+    argocd-image-updater.argoproj.io/board.update-strategy: digest
+    argocd-image-updater.argoproj.io/board.helm.image-name: image.repository
+    argocd-image-updater.argoproj.io/board.helm.image-tag: image.tag
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:bbooth/sdlc-board.git
+    targetRevision: main
+    path: deploy
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: sdlc-board
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
