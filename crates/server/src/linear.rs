@@ -59,14 +59,16 @@ impl Linear {
         let mut read = IssueRead::default();
         for repo in &self.repos {
             let last = self.last.lock().unwrap_or_else(|e| e.into_inner()).get(&repo.name).cloned();
-            let (read_at, issues) = match self.repo_issues(repo).await {
+            let issues = match self.repo_issues(repo).await {
                 Ok(issues) => {
                     read.repos_read += 1;
                     if issues.is_empty() {
                         // Also what a misspelt linear_project gets back.
                         tracing::warn!(repo = %repo.name, project = %repo.linear_project, "no open tickets in the Linear project");
                     }
-                    (crate::sources::now(), issues)
+                    let kept = (crate::sources::now(), issues.clone());
+                    self.last.lock().unwrap_or_else(|e| e.into_inner()).insert(repo.name.clone(), kept);
+                    issues
                 }
                 Err(e) => {
                     tracing::warn!(repo = %repo.name, error = %e, "reading the repo's tickets failed");
@@ -77,10 +79,10 @@ impl Linear {
                     if let Some((at, _)) = &last {
                         read.as_of = Some(read.as_of.map_or(*at, |a| a.min(*at)));
                     }
-                    last.unwrap_or_default()
+                    // Only a good read is kept, so a project that has never read has nothing to date.
+                    last.map(|(_, issues)| issues).unwrap_or_default()
                 }
             };
-            self.last.lock().unwrap_or_else(|e| e.into_inner()).insert(repo.name.clone(), (read_at, issues.clone()));
             read.issues.extend(issues);
         }
         read

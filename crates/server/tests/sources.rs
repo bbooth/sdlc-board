@@ -196,12 +196,15 @@ async fn one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates
     let state = sources::State::new();
     sources::refresh(&state, &linear).await;
     let first_good = state.snapshot().sources.iter().find(|s| s.name == "linear").unwrap().last_good.unwrap();
-    // A later read, so a last_good of "now" would differ from the first read's time.
-    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
 
     f.sdlc_project_down.store(true, Relaxed);
     f.moved.store(true, Relaxed);
-    sources::refresh(&state, &linear).await;
+    // Two failing reads, each later than the good one, so a last_good that
+    // moved to "now" on either would differ from the good read's time.
+    for _ in 0..2 {
+        tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+        sources::refresh(&state, &linear).await;
+    }
     let snap = state.snapshot();
     let status = snap.sources.iter().find(|s| s.name == "linear").unwrap().clone();
     // Linear is as fresh as the kept tickets, not the read that kept them.
@@ -211,4 +214,24 @@ async fn one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates
     assert!(error.ends_with("(kept its tickets from an earlier read)"), "{error}");
     // TRU-10 kept its earlier stage; booking's TRU-6 is still there.
     assert_eq!((card(&snap, "TRU-10").stage.as_str(), card(&snap, "TRU-6").stage.as_str()), ("Build", "PR review"));
+}
+
+// AC-7 within Linear: a project failing from the first read has no tickets to
+// keep, so it says so and doesn't date Linear's data to the epoch.
+#[tokio::test]
+async fn a_linear_project_that_never_read_has_nothing_to_keep() {
+    let f = fakes().await;
+    f.sdlc_project_down.store(true, Relaxed);
+    let repos = vec![repo("bbooth/booking", "Booking"), repo("bbooth/sdlc-board", "SDLC board")];
+    let linear = Linear::new(&format!("{}/graphql", f.url), "k", repos).unwrap();
+    let state = sources::State::new();
+    let before = sources::now();
+    for _ in 0..3 {
+        sources::refresh(&state, &linear).await;
+    }
+    let snap = state.snapshot();
+    let status = snap.sources.iter().find(|s| s.name == "linear").unwrap().clone();
+    assert!(status.last_good.unwrap() >= before, "{:?}", status.last_good);
+    assert!(status.last_error.unwrap().ends_with("(no earlier tickets)"));
+    assert_eq!(card(&snap, "TRU-6").stage, "PR review");
 }

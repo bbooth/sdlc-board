@@ -87,8 +87,17 @@ fn ages_go_by_the_servers_clock() {
     let n = reads.start(Instant::now(), false).unwrap();
     let mut snap: board_api::Snapshot = serde_json::from_str(SNAPSHOT).unwrap();
     snap.generated_at = 5000;
-    reads.finish(n, Ok(snap));
+    reads.finish(n, Ok(snap.clone()));
     assert_eq!(reads.server_now(Instant::now() + secs(90)), Some(5090));
+    // A later board resets the reference: its own time, counted from when it came back.
+    let n = reads.start(Instant::now(), true).unwrap();
+    snap.generated_at = 9000;
+    reads.finish(n, Ok(snap));
+    assert_eq!(reads.server_now(Instant::now() + secs(5)), Some(9005));
+    // A failed read keeps the board's reference.
+    let n = reads.start(Instant::now(), true).unwrap();
+    reads.finish(n, Err("refused".into()));
+    assert_eq!(reads.server_now(Instant::now() + secs(5)), Some(9005));
 }
 
 fn secs(n: u64) -> Duration {
