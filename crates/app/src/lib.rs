@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 /// How often the app reads the snapshot again. The server reads Linear every
 /// minute, so a change shows within two.
 pub const REFRESH: Duration = Duration::from_secs(30);
-/// A read with no answer by then is given up on. The HTTP client has no
-/// timeout for a server that accepts and never answers.
+/// A read's deadline: the app's request times out then, and a read still
+/// unanswered doesn't hold up the next.
 pub const GIVE_UP: Duration = Duration::from_secs(20);
 
 /// The app's reads of the snapshot: the last board read, kept when a later
@@ -27,20 +27,23 @@ impl Reads {
     /// started, or on `asked` when none is waiting on an answer. A read
     /// waiting longer than [`GIVE_UP`] doesn't hold up the next. Returns its number.
     pub fn start(&mut self, now: Instant, asked: bool) -> Option<u64> {
-        let since = self.started.map(|(_, t)| now - t);
-        let waiting = self.started.is_some_and(|(n, _)| n > self.answered) && since < Some(GIVE_UP);
-        let due = since.is_none_or(|d| d >= REFRESH) || asked;
+        let due = self.started.is_none_or(|(_, t)| now - t >= REFRESH) || asked;
         let n = self.started.map_or(1, |(n, _)| n + 1);
-        (due && !waiting).then(|| {
+        (due && !self.waiting(now)).then(|| {
             self.started = Some((n, now));
             n
         })
     }
 
-    /// Takes in read `n`'s answer. One older than the latest read is dropped,
+    /// Whether the latest read is still within its deadline with no answer.
+    pub fn waiting(&self, now: Instant) -> bool {
+        self.started.is_some_and(|(n, t)| n > self.answered && now - t < GIVE_UP)
+    }
+
+    /// Takes in read `n`'s answer, unless a later read has answered already,
     /// so a slow answer can't replace a newer board.
     pub fn finish(&mut self, n: u64, read: Result<Snapshot, String>) {
-        if self.started.is_some_and(|(latest, _)| latest == n) {
+        if n > self.answered {
             self.answered = n;
             match read {
                 Ok(s) => (self.snap, self.error) = (Some(s), None),

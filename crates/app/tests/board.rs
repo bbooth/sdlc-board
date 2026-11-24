@@ -88,6 +88,7 @@ fn secs(n: u64) -> Duration {
 fn the_board_refreshes_itself_every_30_seconds() {
     let (mut reads, t) = (board_app::Reads::default(), Instant::now());
     let first = reads.start(t, false).unwrap();
+    assert!(reads.waiting(t + secs(10)));
     assert_eq!(reads.start(t + secs(10), true), None, "Refresh waits for the answer");
     reads.finish(first, Err("refused".into()));
     assert_eq!(reads.start(t + secs(20), false), None);
@@ -95,10 +96,16 @@ fn the_board_refreshes_itself_every_30_seconds() {
     reads.finish(asked, Err("refused".into()));
     let hung = reads.start(t + secs(51), false).unwrap();
     assert_eq!(reads.problem(t + secs(76)).as_deref(), Some("no answer for 25 s"));
+    assert!(!reads.waiting(t + secs(76)));
     let next = reads.start(t + secs(81), false).unwrap();
     reads.finish(next, Ok(serde_json::from_str(SNAPSHOT).unwrap()));
     reads.finish(hung, Err("late".into()));
     assert_eq!((reads.snap.is_some(), reads.problem(t + secs(82))), (true, None));
+    // A given-up read's answer still counts when nothing newer has answered.
+    let slow = reads.start(t + secs(111), false).unwrap();
+    let _hangs = reads.start(t + secs(141), false).unwrap();
+    reads.finish(slow, Err("slow but real".into()));
+    assert_eq!(reads.problem(t + secs(142)).as_deref(), Some("slow but real"));
 }
 
 // A check state from a newer server reads as unknown rather than failing the whole snapshot.

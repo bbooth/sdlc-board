@@ -31,11 +31,17 @@ impl BoardApp {
             return;
         };
         let (reads, ctx) = (self.reads.clone(), ctx.clone());
-        let req = ehttp::Request::get(format!("{}/v1/snapshot", self.url.trim_end_matches('/')));
-        ehttp::fetch(req, move |res| {
-            let parsed = res
-                .and_then(|r| if r.ok { Ok(r) } else { Err(format!("{} {}", r.status, r.status_text)) })
-                .and_then(|r| serde_json::from_slice::<Snapshot>(&r.bytes).map_err(|e| e.to_string()));
+        let url = format!("{}/v1/snapshot", self.url.trim_end_matches('/'));
+        // The whole call has a deadline, so a server that never answers can't
+        // hold a thread and a socket open.
+        let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(board_app::GIVE_UP)).build().into();
+        std::thread::spawn(move || {
+            let parsed = agent
+                .get(&url)
+                .call()
+                .and_then(|r| r.into_body().read_to_vec())
+                .map_err(|e| e.to_string())
+                .and_then(|b| serde_json::from_slice::<Snapshot>(&b).map_err(|e| e.to_string()));
             reads.lock().unwrap_or_else(|e| e.into_inner()).finish(n, parsed);
             ctx.request_repaint();
         });
@@ -48,14 +54,15 @@ impl eframe::App for BoardApp {
         self.fetch(&ctx, false);
         // Wake up to tick the ages and to read again when due.
         ctx.request_repaint_after(Duration::from_secs(1));
-        let (snap, problem) = {
+        let (snap, problem, waiting) = {
             let r = self.reads.lock().unwrap_or_else(|e| e.into_inner());
-            (r.snap.clone(), r.problem(Instant::now()))
+            (r.snap.clone(), r.problem(Instant::now()), r.waiting(Instant::now()))
         };
         egui::Panel::top("bar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("SDLC board");
-                if ui.button("Refresh").clicked() {
+                let label = if waiting { "Reading…" } else { "Refresh" };
+                if ui.add_enabled(!waiting, egui::Button::new(label)).clicked() {
                     self.fetch(&ctx, true);
                 }
                 if let Some(e) = &problem {
