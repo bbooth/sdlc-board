@@ -13,7 +13,7 @@ async fn main() -> anyhow::Result<()> {
     let state = sources::State::new();
     let linear = linear::Linear::new(&endpoint, &key, config.repos.clone())?;
     tokio::spawn(sources::run(state.clone(), linear));
-    // A token is optional for public repos, but unauthenticated reads are rate limited.
+    // Public repos read without a token, but only for a short while: the unauthenticated limit is 60 an hour.
     let gh_endpoint = std::env::var("GITHUB_ENDPOINT").unwrap_or_else(|_| github::ENDPOINT.into());
     let github = github::GitHub::new(&gh_endpoint, std::env::var("GITHUB_TOKEN").ok(), config.repos.clone())?;
     tokio::spawn(sources::run(state.clone(), github));

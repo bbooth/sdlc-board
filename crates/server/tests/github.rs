@@ -13,10 +13,14 @@ async fn fake_github() -> String {
     };
     let pulls = json!([
         pr(1, "TRU-6: Stop using the fields", "a"),
-        pr(2, "TRU-7: Drop the columns", "b"),
-        pr(3, "TRU-8: One board", "c"),
+        pr(2, "Drop the columns (TRU-7)", "b"),
+        pr(3, "One board", "c"),
         pr(4, "Bump deps", "d")
     ]);
+    // #3 names its ticket only in its body; #4 names none (these aren't IDs).
+    let mut pulls = pulls;
+    pulls[2]["body"] = json!("Implements TRU-8.");
+    pulls[3]["body"] = json!("Bumps TRU-800X, XTRU-9 and TRU-");
     let runs = |sha: String| {
         let run = |status: &str, conclusion: Value| json!({"status": status, "conclusion": conclusion});
         let runs = match sha.as_str() {

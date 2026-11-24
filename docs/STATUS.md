@@ -13,7 +13,8 @@
   and gate records on the PR's branch) and gate output posted on Linear
   tickets. Cards show the latest gate and the PR; a "Needs you" list above
   the columns has specs to approve, green PRs to merge and blocked tickets.
-  `GITHUB_TOKEN` is optional for public repos (`GITHUB_ENDPOINT` to override).
+  Set `GITHUB_TOKEN` (read-only): without one, GitHub's limit of 60
+  requests an hour runs out within the hour (`GITHUB_ENDPOINT` to override).
 
 ## Next
 

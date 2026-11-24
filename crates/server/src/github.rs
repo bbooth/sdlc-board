@@ -6,7 +6,7 @@ use std::time::Duration;
 
 pub const ENDPOINT: &str = "https://api.github.com";
 
-/// An open PR, tied to the ticket its title starts with.
+/// An open PR, tied to the ticket its title (or else its body) names.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrInfo {
     pub ticket: String,
@@ -53,7 +53,11 @@ impl GitHub {
             let pulls = self.get(&format!("{base}/pulls"), &[("state", "open"), ("per_page", "100")]).await?;
             for p in pulls.as_ref().and_then(Value::as_array).into_iter().flatten() {
                 let title = p["title"].as_str().unwrap_or_default();
-                let Some(ticket) = ticket_id(title, &repo.linear_team) else { continue };
+                let body = p["body"].as_str().unwrap_or_default();
+                let Some(ticket) = ticket_id(title, &repo.linear_team).or_else(|| ticket_id(body, &repo.linear_team))
+                else {
+                    continue;
+                };
                 let (sha, branch) = (p["head"]["sha"].as_str().unwrap_or(""), p["head"]["ref"].as_str().unwrap_or(""));
                 let runs = self.get(&format!("{base}/commits/{sha}/check-runs"), &[("per_page", "100")]).await?;
                 let gate = self.record(&base, &ticket, branch).await?;
@@ -96,9 +100,15 @@ pub fn checks(runs: &Value) -> Checks {
     }
 }
 
-/// `TRU-9: Show tickets` belongs to TRU-9 when the team key is `TRU`.
-pub fn ticket_id(title: &str, team: &str) -> Option<String> {
-    let id = title.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-')).next()?;
-    let (key, num) = id.split_once('-')?;
-    (key == team && !num.is_empty() && num.chars().all(|c| c.is_ascii_digit())).then(|| id.into())
+/// The first ticket ID with the team's key in the text: `TRU-9: Show tickets`
+/// and `Show tickets (TRU-9)` both name TRU-9 when the key is `TRU`.
+pub fn ticket_id(text: &str, team: &str) -> Option<String> {
+    let words = text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'));
+    words
+        .map(|w| w.trim_matches('-'))
+        .find(|w| {
+            w.split_once('-')
+                .is_some_and(|(key, n)| key == team && !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+        })
+        .map(String::from)
 }
