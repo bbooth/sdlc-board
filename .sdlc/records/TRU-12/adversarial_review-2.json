@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-12",
+  "round": 2,
+  "result": "fail",
+  "recorded_at": "2026-11-24T21:24:23.821Z",
+  "inputs": {
+    "branch": "feat/tru-12-deploy-web-access",
+    "commit": "b5e6266",
+    "verify_record": ".sdlc/records/TRU-12/verify-2.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-12/verify-2.json says pass at 40e5377"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 40e5377"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at b5e6266"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read b5e6266"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "9 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "1 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "1 stand: [operability] .github/workflows/ci.yaml:63: 'Decide tags' gives :latest only when main's HEAD SHA equals this run's SHA. Since the round-1 fix, Image Updater's write-back commits to deploy/.argocd-source-sdlc-board.yaml start no CI run at all (paths-ignore, ci.yaml:7), but they still move main's HEAD. Here is the sequence. PR X merges as A1. Then PR Y merges as A2 while A1's image job is building. A1 pushes :latest, and within Image Updater's poll interval (about 2 min) it commits write-back B1 on top of A2. A2's cargo and deploy jobs finish, its image job starts, `git fetch origin main` returns B1, and B1 != A2. So A2 is pushed only as :<sha>, and only a ::notice says 'main moved on'. B1's run is skipped, so no run tags A2's code :latest. What you'd see: main holds Y, but the cluster keeps running X's image until some later non-write-back push. No failed check, alert or metric shows it. The window is the whole cargo job (up to 30 min), because the check runs at the start of the image job, not after the build. booking avoids this by comparing the image's inputs rather than the SHA (booking ci.yaml:350, `git diff --quiet $sha FETCH_HEAD -- <inputs>`). This repo would need t"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:61: this is still open from round 1. The native app adds CF-Access-Client-Id and CF-Access-Client-Secret to whatever URL BOARD_URL names (read at line 14) and never checks that the scheme is https. Two sequences go wrong. (1) The owner sets BOARD_URL=http://board.trulinc.com, so the secret goes out in cleartext on the first request, before Cloudflare redirects to https. (2) The token variables are exported while BOARD_URL points at a non-loopback http host, so the secret goes to that host. In both cases anyone who sees the secret can read the board through Access from anywhere until the owner rotates it. Fix: send the headers only when the URL is https or a loopback address.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "blocking",
+      "summary": ".github/workflows/ci.yaml:63: 'Decide tags' gives :latest only when main's HEAD SHA equals this run's SHA. Since the round-1 fix, Image Updater's write-back commits to deploy/.argocd-source-sdlc-board.yaml start no CI run at all (paths-ignore, ci.yaml:7), but they still move main's HEAD. Here is the sequence. PR X merges as A1. Then PR Y merges as A2 while A1's image job is building. A1 pushes :latest, and within Image Updater's poll interval (about 2 min) it commits write-back B1 on top of A2. A2's cargo and deploy jobs finish, its image job starts, `git fetch origin main` returns B1, and B1 != A2. So A2 is pushed only as :<sha>, and only a ::notice says 'main moved on'. B1's run is skipped, so no run tags A2's code :latest. What you'd see: main holds Y, but the cluster keeps running X's image until some later non-write-back push. No failed check, alert or metric shows it. The window is the whole cargo job (up to 30 min), because the check runs at the start of the image job, not after the build. booking avoids this by comparing the image's inputs rather than the SHA (booking ci.yaml:350, `git diff --quiet $sha FETCH_HEAD -- <inputs>`). This repo would need the same, e.g. ignore a diff limited to deploy/.argocd-source-*.yaml.",
+      "status": "open",
+      "scope": "operability",
+      "reason": "The judge confirmed it: 'Decide tags' compares SHAs only, and Image Updater's write-back starts no run (paths-ignore), so a write-back landing before a newer merge's image job leaves that merge without :latest, silently.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": ".github/workflows/ci.yaml:78: every push to main that isn't a write-back runs build-push-action with its default provenance attestation. That includes docs-only and STATUS-only merges, whose files .dockerignore keeps out of the image. The attestation records the build invocation and time, so :latest's index digest changes even when every layer comes from cache. Image Updater (digest strategy, argocd/application.yaml:10) sees a new digest, writes back, and the Recreate Deployment (deploy/templates/board.yaml:29) restarts the only pod for a commit that changed nothing in it. Setting `provenance: false`, or skipping the push when the image's inputs didn't change (as booking does), would stop these restarts.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/main.rs:45: still open from round 1. Neither axum::serve call has with_graceful_shutdown, and no SIGTERM handler is installed. board-server is PID 1 in the distroless image (Dockerfile:18), so SIGTERM is ignored. Each rollout waits the full 30s terminationGracePeriod, then SIGKILLs the pod and drops any in-flight request. Recreate starts the new pod only after that, so the board has no endpoint for at least 30s on every Image Updater cycle.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "deploy/templates/board.yaml:82: still open from round 1. Readiness is /healthz, which returns ok before Access::run's first key read (crates/server/src/access.rs:78) has finished or succeeded. If that first read fails (egress or DNS not up yet), every request, valid token included, gets 401 'Log in through Cloudflare Access' for at least MIN_REREAD (60s). Under Recreate there is no old pod to take that traffic. The pod stays Ready the whole time, and the only signal is the access_keys error counter.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:82: no test runs the expired-login path. The wasm get() is cfg'd out of the native tests, so deleting set_redirect(Manual) on line 78 or the Opaqueredirect branch still passes every test. Verify's mutant showed this: the bar went back to 'JsValue(TypeError: Failed to fetch ...)'. The round-1 blocking fix is guarded only by a manual Chromium check against a stand-in edge, not real Cloudflare. If someone changes the fetch path later, the confusing message can come back without any test failing.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:140: if the first read after the page loads is the redirect, there is no board yet. That happens when a tab is restored or the page comes from the browser cache after the Access session ended. The bar then says 'your Cloudflare Access login has expired: reload the page', but the main panel says 'No board yet: the next read is due within 30 s.' That tells the user waiting will help, and it won't: every 30 s read gets the same redirect until they reload. The panel text should follow the problem, or say to reload in this case.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/routes.rs:19: still open from round 1. ServeDir serves index.html, board-app.js and board-app_bg.wasm under fixed names with no Cache-Control header. After a deploy that changes the app, a browser or Cloudflare's cache can serve a cached old board-app.js with the new board-app_bg.wasm (Cloudflare caches .js by extension but not .wasm). Their wasm-bindgen imports then don't match, and the page stays blank with the error only in the console. Image Updater ships every merge to main, so this can happen after any deploy that changes the app.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/web/index.html:10: still open from round 1. The page shows an empty canvas with no loading text while the multi-MB wasm downloads over the tunnel. If init() or WebRunner::start fails (crates/app/src/main.rs:41), the error goes only to console.error and the page stays blank for good. The canvas has no aria-label or fallback content, so a screen reader finds nothing on the page.",
+      "status": "open",
+      "scope": "web"
+    }
+  ],
+  "decision": "Back to Build: fix what stands, then Build, Verify and review again",
+  "evidence": []
+}
