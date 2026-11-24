@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-10",
+  "round": 3,
+  "result": "pass",
+  "recorded_at": "2026-11-24T04:54:47.585Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "252b13f",
+    "build_record": ".sdlc/records/TRU-10/build-3.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/build-3.json says pass at 3f3d741"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 3f3d741"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 252b13f"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 252b13f"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-2, AC-3"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "11 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "6 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner passed: cargo test -p board-server --test needs_you"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr passed: cargo test -p board-server --test github"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read passed: cargo test -p board-server --test github"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr passed: cargo test -p board-server --test github"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "4 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/board.rs:66 pr_for: no test covers a ticket with two PRs on branches that name it. With the key changed to (by_branch, Reverse(number)), which shows the oldest, every test still passes. The e2e run with the made-up #903 and #49 showed the newest, as built."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:60: no test covers a branch and a title that name different tickets. Swapping the order to title first, then branch, still passes every test. The e2e run showed the branch winning (#902, titled 'TRU-6: misc' on fix/tru-7-thing, went to TRU-7)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:96 still reads only check-runs. A PR with no check runs, or with only commit statuses, stays 'pending' and never reaches Needs you. Carried over from rounds 1 and 2; seen in the code here, not reproduced with real data."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/main.rs:16 the GitHub source refreshes every 60s. One read for the two configured repos made 8 GitHub requests with only 2 tied PRs, which is about 480 an hour, well past the 60-an-hour unauthenticated limit that main.rs's own comment mentions."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-2 test crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner: PASS at HEAD. FAILS with the checks==Pass filter removed, and FAILS with the Blocked stage renamed.",
+    "AC-2 test crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr: PASS at HEAD. FAILS (github.rs:123) when needs_you lists every green PR tied to a ticket instead of the ticket's own PR.",
+    "AC-2 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS at HEAD. FAILS when the Needs-you strip is not drawn.",
+    "AC-2 e2e GET /v1/snapshot from board-server. The GitHub proxy serves bbooth/booking's real closed PRs #42-#59 as open. The Linear proxy relabels real tickets: TRU-5 Ready for approval, TRU-6 and TRU-7 PR review, TRU-11 Blocked: needs_you has 4 items: approve TRU-5 (Linear URL), merge TRU-7 (pull/53), merge TRU-6 (pull/49), blocked TRU-11 (Linear URL). The ci/infra PRs that mention TRU-6 or TRU-7 only in their bodies (#48, #50, #52, #56 and others) are not tied and not listed. The GitHub source made 8 requests in one read, and both sources reported last_error null.",
+    "AC-2 e2e Same stack with four made-up PRs added: #904 on branch feat/tru-60-x, #903 on branch backend/tru-6-follow-up, #902 titled 'TRU-6: misc' on branch fix/tru-7-thing with a check still in progress, #901 titled 'TRU-5: notes' whose body names TRU-6: TRU-6's merge item became #903, the newer PR on its own branch. TRU-7 got no merge item because its newest PR, #902, is tied by branch and is pending. #904 (TRU-60, not a ticket) was ignored. #901 is tied to TRU-5 by its title, not to TRU-6 by its body.",
+    "AC-2 e2e board-app under Xvfb with BOARD_URL pointing at the server above; screenshot /tmp/claude-0/-home-user/98104b15-8b34-5886-b846-3f778f48a384/scratchpad/verify3-tru10/app.png: 'Needs you (4)' is drawn above the stage columns, with link rows 'Approve the spec: TRU-5 …', 'Merge: TRU-7 …', 'Merge: TRU-6 …' and 'Blocked: TRU-11 …'.",
+    "AC-3 test crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read: PASS at HEAD. FAILS when body mentions tie a PR, and FAILS when pending check runs map to pass.",
+    "AC-3 test crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr: PASS at HEAD. FAILS with any of: pr_for using find(); pr_for taking the newest by number ignoring branch; latest() ordering by round first; comment gates dropped.",
+    "AC-3 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS",
+    "AC-3 e2e GET /v1/snapshot with real bbooth/booking data (merged PRs served as open) and real Linear comments: TRU-6's card shows gate Rollout round 1 pass and PR #49 (pull/49), checks pass. TRU-7's card shows Rollout round 1 pass and PR #53, checks pass. TRU-10 shows Verify round 2 fail from its comments. Checked against the sources: TRU-6's latest Linear gate comment is '### Gate: Rollout (pass) · round 1'. Its branch holds adversarial_review-1, build-1 and verify-1, and the server read adversarial_review-1.json (result pass). All 14 check runs on #49's head are completed with success or skipped.",
+    "AC-3 e2e board-app under Xvfb, same screenshot app.png: Under TRU-5, TRU-6's row reads 'Rollout round 1: pass' and 'PR #49 checks pass', and TRU-7's reads 'Rollout round 1: pass' and 'PR #53 checks pass', drawn as links. TRU-10 reads 'Verify round 2: fail'."
+  ]
+}
