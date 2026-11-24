@@ -61,8 +61,8 @@ fn nest(issue: &Issue, children: &HashMap<&str, Vec<&Issue>>, prs: &[PrInfo]) ->
     }
 }
 
-/// What waits on the owner: specs to approve, PRs whose checks all passed,
-/// and blocked tickets.
+/// What waits on the owner: specs to approve, PRs in PR review whose checks
+/// all passed, and blocked tickets.
 pub fn needs_you(issues: &[Issue], prs: &[PrInfo]) -> Vec<NeedsYou> {
     let item = |kind: &str, id: &str, title: &str, url: &str| NeedsYou {
         kind: kind.into(),
@@ -73,7 +73,9 @@ pub fn needs_you(issues: &[Issue], prs: &[PrInfo]) -> Vec<NeedsYou> {
     let in_stage = |stage: &'static str| issues.iter().filter(move |i| i.open && i.stage.as_deref() == Some(stage));
     let mut out: Vec<NeedsYou> =
         in_stage("Ready for approval").map(|i| item("approve", &i.id, &i.title, &i.url)).collect();
-    let green = prs.iter().filter(|p| p.pr.checks == Checks::Pass && !p.draft);
+    let in_review: Vec<&str> = in_stage("PR review").map(|i| i.id.as_str()).collect();
+    let green =
+        prs.iter().filter(|p| p.pr.checks == Checks::Pass && !p.draft && in_review.contains(&p.ticket.as_str()));
     out.extend(green.map(|p| item("merge", &p.ticket, &p.pr.title, &p.pr.url)));
     out.extend(in_stage("Blocked").map(|i| item("blocked", &i.id, &i.title, &i.url)));
     out
