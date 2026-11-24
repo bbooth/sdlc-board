@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-10",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-24T04:25:18.971Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "3fa3d8a"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-10-prs-gates-needs-you"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "18 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "6 test files changed with 9 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "524 lines changed; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 3fa3d8a"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "7 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/server/src/gates.rs:31-36 (from_comment) with the GATES list at gates.rs:8-12: the plugin titles owner decisions as `STAGE_TITLES[stage] + ' approval'` (/home/user/agentic-sdlc/plugins/sdlc/bin/lib.mjs:85). That gives headers like `### Gate: Spec approval (pass) · round 1` and `### Gate: PR review approval (fail) · round 1`. approve.mjs only posts these as comments and never writes a record file. `GATES.iter().any(|(_, n)| *n == stage)` rejects every one of them, so the owner's decision is never the latest gate. What you would see: after the owner rejects a PR ('Back to Build'), the card still shows the earlier `Adversarial review round N: pass`. That breaks AC-3 ('the latest gate's stage, round and pass or fail ... in its Linear comments'). The plugin's `intake` stage is also missing from GATES. No test covers an approval comment.",
+      "reason": "Fixed in 3fa3d8a: approvals sort right after the gate they decide on, Intake added, and crates/server/tests/github.rs covers a rejected PR review approval and a Spec approval."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:56 and crates/server/src/main.rs:16-17: each read makes one pulls call per repo, plus a check-runs call and one or two contents calls per PR, every 60 seconds, with an immediate retry when a read fails. Without a token, GitHub allows 60 requests an hour, and even zero PRs uses 60. docs/STATUS.md says `GITHUB_TOKEN` is optional, but without it the github source starts failing with 403 rate-limit errors within the hour and stays failing. The retry only spends more of the quota. Either require the token, or back off and read less often without one."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:56 (`state=open` only) and :62/:83 (records read from the PR's head branch only): a merged PR and the gate records it brought to main are never read. The ticket's end-to-end check says 'a merged pipeline PR and TRU-6's records show on its card' against bbooth/booking. With this code, TRU-6's card shows no PR, and shows a gate only if one is in its comments, so that check can't pass as written. Either change the check to an open PR or read merged PRs and records on main. There are no TRU-10 records in .sdlc/records/ yet showing which was done."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:56 and :61: pulls and check-runs use `per_page=100` and never read a second page. A repo with more than 100 open PRs silently loses the rest. A commit with more than 100 check runs can show `checks pass` (and get a 'Merge' item in Needs you) while a failed run sits on page 2. Neither is logged."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:87-99 (checks): only the check-runs API is read, not commit statuses (`/commits/{sha}/status`). A repo whose CI reports through statuses gets no runs, so every PR shows `checks pending` and never reaches the 'Merge' list."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/linear.rs:14: the query reads only `comments(first: 50)`. Each gate round posts a comment, so a ticket with more than 50 comments drops the rest. Which ones are dropped depends on Linear's default order, so the card's 'latest' gate can be stale. Nothing logs when the limit is hit."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:58-71: one failed request (a 5xx or 403 on any single PR's check-runs or contents call) fails the whole GitHub read for every repo. The `?` on each call returns the error straight up, so the snapshot keeps the stale PR list for all repos instead of skipping that one PR and logging it."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
