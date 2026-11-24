@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-10",
+  "round": 1,
+  "result": "fail",
+  "recorded_at": "2026-11-24T04:33:07.569Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "3b60d49",
+    "build_record": ".sdlc/records/TRU-10/build-1.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/build-1.json says pass at 3fa3d8a"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 3fa3d8a"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 3b60d49"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 3b60d49"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-2, AC-3"
+    },
+    {
+      "name": "criteria_met",
+      "pass": false,
+      "detail": "AC-3 is not_met (The mechanism works when a PR title starts with the ticket ID.\n- Real Linear plus real GitHub for the TRU-10 branch: the TRU-10 card showed Build round 1 pass, read from .sdlc/records/TRU-10/build-1.json on feat/tru-10-prs-gates-needs-you. The PR showed as checks pending; 3b60d49 has 0 check runs.\n- The TRU-8 card got Plan round 2 pass from its real Linear comments, so the comments query works against real Linear.\n- With the titles rewritten to start with the ID, booking's TRU-6/TRU-7 cards showed 'Adversarial review round 1: pass' from the real record files, and 'PR #49 checks pass' / 'PR #53 checks pass' from the real check-runs.\nThe gap: the real pipeline PRs in bbooth/booking name their ticket at the end, e.g. #49 'Drop Tenant.display_name and Tenant.coach_mode from the API (TRU-6)' and #53 '... (TRU-7)'. With those real titles served as open, the GitHub source returned prs=2 (sdlc-board only), and both booking PRs were silently dropped. A booking sub-ticket with an open pipeline PR would show no PR and no branch gate. The ticket's own e2e ('against bbooth/booking, a merged pipeline PR and TRU-6's records show on its card') fails on real data. The plugin's PR gate (check-pr.mjs names_ticket) accepts the ID anywhere in the title or body, so a prefix is not a pipeline convention.)"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "8 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "5 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner passed: cargo test --test needs_you specs_to_approve_green_prs_and_blocked_tickets_need_the_owner"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test --test board needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read passed: cargo test --test github checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr passed: cargo test --test github a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test --test board needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "1 open: crates/server/src/github.rs:405 ticket_id ties a PR to a ticket only when its title starts with the ticket ID. bbooth/booking's real pipeline PRs name it at the end, e.g. #49 '... (TRU-6)' and #53 '... (TRU-7)'. Observed: with those real PRs served as open, the GitHub source dropped both. So AC-3's PR (and the branch gate) never reaches a booking card, and the same PRs never reach AC-2's Needs-you merge list. The plugin's PR gate accepts the ID anywhere in the title or body."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:405 ticket_id ties a PR to a ticket only when its title starts with the ticket ID. bbooth/booking's real pipeline PRs name it at the end, e.g. #49 '... (TRU-6)' and #53 '... (TRU-7)'. Observed: with those real PRs served as open, the GitHub source dropped both. So AC-3's PR (and the branch gate) never reaches a booking card, and the same PRs never reach AC-2's Needs-you merge list. The plugin's PR gate accepts the ID anywhere in the title or body."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/main.rs:471 and docs/STATUS.md say GITHUB_TOKEN is optional for public repos. Without a token, each 60 s refresh makes at least 1 request per repo plus 3 per ticket PR (pulls, check-runs, records dir, record file). With the two configured repos and no PRs that is about 120 requests an hour, over GitHub's unauthenticated limit of 60, so the GitHub source goes stale within about 30 minutes."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:390 checks() reads only check-runs: commit statuses (the /status API) are ignored, and a PR with no check runs is 'pending' forever. Observed: sdlc-board 3b60d49 has 0 check runs and shows checks pending, so a repo without Actions CI never gets a 'merge' item in Needs you."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/board.rs:217 prs.iter().find picks the first PR whose title names the ticket. A ticket with two open PRs, or the same ID in two repos that share the TRU key, shows one arbitrary PR."
+    }
+  ],
+  "decision": "Back to Build: fix, pass the Build gate again, then re-verify",
+  "evidence": [
+    "AC-2 test crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner: PASS. Fails if the checks==Pass filter is removed or if Blocked is dropped.",
+    "AC-2 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS. Fails if the Needs-you strip is not drawn.",
+    "AC-2 e2e GET /v1/snapshot from board-server (fake Linear, real GitHub via pass-through proxy), and board-app under Xvfb: needs_you = [approve TRU-20 linear URL, merge TRU-7 pull/53, merge TRU-6 pull/49, merge TRU-9 sdlc-board pull/4, blocked TRU-21 linear URL]. The app draws 'Needs you (5)' with these links above the 'Intake (0)…Blocked (1)' columns. Screenshot: /tmp/claude-0/-home-user/98104b15-8b34-5886-b846-3f778f48a384/scratchpad/verify-tru10/app-prefix.png",
+    "AC-3 test crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read: PASS. Fails if failures are ignored, if pending/no-runs is ignored, or if record files are chosen by round only.",
+    "AC-3 test crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr: PASS. Fails if latest() ignores stage order.",
+    "AC-3 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS. Fails if a sub-ticket's details row is not drawn.",
+    "AC-3 e2e board-server with real LINEAR_API_KEY, config bbooth/booking + bbooth/sdlc-board, GITHUB_ENDPOINT = pass-through proxy serving booking #49/#53 with real titles as open: github source read prs=2. Booking #49 (TRU-6) and #53 (TRU-7) were not tied to any ticket. TRU-10 card: gate Build r1 pass from the branch record, PR checks pending. TRU-8: gate Plan r2 pass from Linear comments.",
+    "AC-3 e2e same, with fake Linear (TRU-5 > TRU-6, TRU-7 in PR review) and the proxy prefixing the titles with 'TRU-6: ' / 'TRU-7: ': The TRU-6 card shows Adversarial review round 1 pass (branch record beats the comment's Verify r2) and PR #49 checks pass. TRU-7 likewise with #53. The app draws both under TRU-5."
+  ]
+}
