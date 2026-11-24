@@ -3,6 +3,8 @@ on:
   pull_request:
   push:
     branches: [main]
+    # Image Updater's digest write-back: building on it would push a new digest, and loop.
+    paths-ignore: [deploy/.argocd-source-sdlc-board.yaml]
 permissions:
   contents: read
 jobs:
@@ -40,8 +42,7 @@ jobs:
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
 
-  # Builds the image on every PR, so a broken Dockerfile fails the PR, and
-  # pushes it on main once the other jobs passed.
+  # Built on every PR, so a broken Dockerfile fails it; pushed from main.
   image:
     needs: [cargo, deploy]
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
@@ -51,8 +52,7 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      # Image Updater deploys whatever :latest points at, so an older run that
-      # finishes after a newer one must not overwrite it.
+      # Only main's head gets :latest, so a slow older run can't overwrite a newer one.
       - name: Decide tags
         id: tags
         if: github.ref == 'refs/heads/main'

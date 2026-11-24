@@ -58,18 +58,10 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
-          env:
-            - name: LINEAR_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.tokensSecret }}
-                  key: LINEAR_API_KEY
-            - name: GITHUB_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.tokensSecret }}
-                  key: GITHUB_TOKEN
-                  optional: true
+          # LINEAR_API_KEY, and GITHUB_TOKEN if present.
+          envFrom:
+            - secretRef:
+                name: {{ .Values.tokensSecret }}
           ports:
             - name: http
               containerPort: 8080

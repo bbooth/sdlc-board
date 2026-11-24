@@ -17,7 +17,7 @@ ureq = "3.5.2"
 # The web build fetches with the browser's fetch and an AbortSignal deadline.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4.80"
-web-sys = { version = "0.3.107", features = ["AbortSignal", "Document", "Location", "console", "HtmlCanvasElement", "Request", "RequestInit", "Response", "Window"] }
+web-sys = { version = "0.3.107", features = ["AbortSignal", "Document", "Location", "console", "HtmlCanvasElement", "Request", "RequestInit", "RequestRedirect", "Response", "ResponseType", "Window"] }
 
 [dev-dependencies]
 egui_kittest = "0.37.0"

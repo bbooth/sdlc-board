@@ -74,10 +74,14 @@ fn get(url: String, done: impl FnOnce(Result<Vec<u8>, String>) + 'static) {
         let read = async {
             let init = web_sys::RequestInit::new();
             init.set_signal(Some(&web_sys::AbortSignal::timeout_with_u32(GIVE_UP.as_millis() as u32)));
+            // An expired Access login redirects to Cloudflare, which fetch can't follow cross-origin.
+            init.set_redirect(web_sys::RequestRedirect::Manual);
             let window = web_sys::window().ok_or("no window")?;
             let resp: web_sys::Response =
                 JsFuture::from(window.fetch_with_str_and_init(&url, &init)).await.map_err(err)?.unchecked_into();
-            if !resp.ok() {
+            if resp.type_() == web_sys::ResponseType::Opaqueredirect || resp.status() == 401 {
+                return Err("your Cloudflare Access login has expired: reload the page".into());
+            } else if !resp.ok() {
                 return Err(format!("{} {}", resp.status(), resp.status_text()));
             }
             let text = JsFuture::from(resp.text().map_err(err)?).await.map_err(err)?;
