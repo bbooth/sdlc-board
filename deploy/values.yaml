@@ -1,17 +1,15 @@
-# The public address, routed by homelab-infra's Cloudflare Tunnel to the
-# shared Traefik Gateway. Cloudflare Access sits in front of it.
+# Routed by the Cloudflare Tunnel to the shared Traefik Gateway, behind Access.
 hostnames:
   - board.trulinc.com
 
-# The Cloudflare Access application in front of hostnames. Neither is a
-# secret; the server checks every request's Access token against them.
+# The Access application in front of hostnames (argocd/README.md); not secrets.
 access:
   # https://<team>.cloudflareaccess.com
   issuer: ""
   # The application's Application Audience (AUD) tag.
   aud: ""
 
-# board.toml's repos: each GitHub repo and the Linear project its tickets live in.
+# board.toml's repos.
 repos:
   - name: bbooth/booking
     linearTeam: TRU
@@ -20,8 +18,7 @@ repos:
     linearTeam: TRU
     linearProject: SDLC board
 
-# Applied to the cluster by hand, never committed (argocd/README.md):
-# LINEAR_API_KEY, and GITHUB_TOKEN, which is optional.
+# Applied by hand (argocd/README.md): LINEAR_API_KEY, optional GITHUB_TOKEN.
 tokensSecret: sdlc-board-tokens
 
 # image.tag is what ArgoCD Image Updater pins (argocd/application.yaml).

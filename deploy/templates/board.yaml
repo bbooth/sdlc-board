@@ -23,8 +23,7 @@ metadata:
   labels:
     app.kubernetes.io/name: sdlc-board
 spec:
-  # One replica: each reads Linear and GitHub itself, and two would halve
-  # GitHub's tokenless budget.
+  # One replica: each would read Linear and GitHub itself.
   replicas: 1
   strategy:
     type: Recreate
@@ -81,13 +80,9 @@ spec:
               mountPath: /etc/board
               readOnly: true
           readinessProbe:
-            httpGet:
-              path: /healthz
-              port: 8080
+            httpGet: { path: /healthz, port: 8080 }
           livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 8080
+            httpGet: { path: /healthz, port: 8080 }
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
@@ -108,7 +103,6 @@ spec:
     - name: http
       port: 8080
       targetPort: 8080
-    # Scraped by the ServiceMonitor; no route points here.
     - name: metrics
       port: 9091
       targetPort: 9091

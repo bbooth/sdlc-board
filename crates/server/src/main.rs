@@ -13,7 +13,7 @@ async fn main() -> anyhow::Result<()> {
     // it, so that takes an explicit opt-out, for a local run only.
     let state = sources::State::new();
     let access = match (config.access.clone(), std::env::var("BOARD_NO_ACCESS").is_ok_and(|v| v == "1")) {
-        (Some(settings), _) => Some(Arc::new(Access::new(settings)?.observed(state.clone()))),
+        (Some(settings), _) => Some(Arc::new(Access::new(settings, state.clone())?)),
         (None, true) => {
             tracing::warn!("BOARD_NO_ACCESS=1: serving without checking Cloudflare Access");
             None

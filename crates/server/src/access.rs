@@ -29,67 +29,48 @@ pub struct Access {
     client: reqwest::Client,
     keys: RwLock<Vec<(String, DecodingKey)>>,
     last_read: RwLock<Option<Instant>>,
-    /// Where key reads are counted, as source `access_keys`.
-    state: Option<Arc<State>>,
+    state: Arc<State>,
 }
 
 #[derive(Deserialize)]
 struct Claims {}
 
 impl Access {
-    pub fn new(settings: Settings) -> anyhow::Result<Self> {
-        Self::with_certs(settings.clone(), &format!("{}/cdn-cgi/access/certs", settings.issuer.trim_end_matches('/')))
+    /// `state` counts the key reads, as source `access_keys`: when none work, every request gets 401.
+    pub fn new(settings: Settings, state: Arc<State>) -> anyhow::Result<Self> {
+        let certs = format!("{}/cdn-cgi/access/certs", settings.issuer.trim_end_matches('/'));
+        Self::with_certs(settings, &certs, state)
     }
 
     /// Reads the signing keys from `certs` instead of Cloudflare, for tests.
-    pub fn with_certs(settings: Settings, certs: &str) -> anyhow::Result<Self> {
+    pub fn with_certs(settings: Settings, certs: &str, state: Arc<State>) -> anyhow::Result<Self> {
         let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build()?;
-        Ok(Self {
-            settings,
-            certs: certs.into(),
-            client,
-            keys: RwLock::default(),
-            last_read: RwLock::default(),
-            state: None,
-        })
-    }
-
-    /// Counts key reads in `state`'s metrics: when none work, every request gets 401.
-    pub fn observed(mut self, state: Arc<State>) -> Self {
-        self.state = Some(state);
-        self
+        let (keys, last_read) = (RwLock::default(), RwLock::default());
+        Ok(Self { settings, certs: certs.into(), client, keys, last_read, state })
     }
 
     /// Reads the signing keys, counting the read; on failure the earlier keys stay.
     pub async fn read_keys(&self) -> anyhow::Result<usize> {
         let started = Instant::now();
-        let read = self.read_keys_once().await;
-        if let Some(s) = &self.state {
-            s.metrics.observe("access_keys", started.elapsed().as_secs_f64(), read.is_ok());
-        }
+        *self.last_read.write().unwrap_or_else(|e| e.into_inner()) = Some(started);
+        let fetch = async { self.client.get(&self.certs).send().await?.error_for_status()?.json::<JwkSet>().await };
+        let read = match fetch.await {
+            Ok(set) => {
+                let keys: Vec<_> = set
+                    .keys
+                    .iter()
+                    .filter_map(|k| Some((k.common.key_id.clone()?, DecodingKey::from_jwk(k).ok()?)))
+                    .collect();
+                let n = keys.len();
+                if n > 0 {
+                    *self.keys.write().unwrap_or_else(|e| e.into_inner()) = keys;
+                }
+                (n > 0).then_some(n).ok_or_else(|| anyhow::anyhow!("Access keys from {}: none usable", self.certs))
+            }
+            Err(e) => Err(anyhow::anyhow!("Access keys from {}: {e}", self.certs)),
+        };
+        self.state.metrics.observe("access_keys", started.elapsed().as_secs_f64(), read.is_ok());
         read
-    }
-
-    async fn read_keys_once(&self) -> anyhow::Result<usize> {
-        *self.last_read.write().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
-        let e = |err: reqwest::Error| anyhow::anyhow!("Access keys from {}: {err}", self.certs);
-        let set: JwkSet = self
-            .client
-            .get(&self.certs)
-            .send()
-            .await
-            .map_err(e)?
-            .error_for_status()
-            .map_err(e)?
-            .json()
-            .await
-            .map_err(e)?;
-        let keys: Vec<_> =
-            set.keys.iter().filter_map(|k| Some((k.common.key_id.clone()?, DecodingKey::from_jwk(k).ok()?))).collect();
-        anyhow::ensure!(!keys.is_empty(), "Access keys from {}: none usable", self.certs);
-        let n = keys.len();
-        *self.keys.write().unwrap_or_else(|e| e.into_inner()) = keys;
-        Ok(n)
     }
 
     /// Reads the keys now and then every [`REFRESH`], or every minute until a read works.

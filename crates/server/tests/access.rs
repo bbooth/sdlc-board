@@ -49,8 +49,7 @@ async fn certs() -> (String, Arc<AtomicUsize>) {
 async fn board() -> (Router, Arc<AtomicUsize>) {
     let (url, reads) = certs().await;
     let state = sources::State::new();
-    let access =
-        Access::with_certs(Settings { issuer: ISS.into(), aud: AUD.into() }, &url).unwrap().observed(state.clone());
+    let access = Access::with_certs(Settings { issuer: ISS.into(), aud: AUD.into() }, &url, state.clone()).unwrap();
     access.read_keys().await.unwrap();
     let web = std::env::temp_dir().join(format!("board-web-{}", std::process::id()));
     std::fs::create_dir_all(&web).unwrap();
@@ -119,8 +118,8 @@ async fn key_reads_are_counted_and_a_failed_one_is_an_error() {
     let state = sources::State::new();
     let settings = || Settings { issuer: ISS.into(), aud: AUD.into() };
     let (url, _) = certs().await;
-    Access::with_certs(settings(), &url).unwrap().observed(state.clone()).read_keys().await.unwrap();
-    let gone = Access::with_certs(settings(), &url.replace("/certs", "/gone")).unwrap().observed(state.clone());
+    Access::with_certs(settings(), &url, state.clone()).unwrap().read_keys().await.unwrap();
+    let gone = Access::with_certs(settings(), &url.replace("/certs", "/gone"), state.clone()).unwrap();
     assert!(gone.read_keys().await.is_err());
     let text = state.metrics.render(&[]);
     assert!(text.contains(r#"board_source_reads_total{source="access_keys"} 2"#), "{text}");
