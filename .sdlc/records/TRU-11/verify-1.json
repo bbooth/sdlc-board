@@ -1,0 +1,143 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-11",
+  "round": 1,
+  "result": "fail",
+  "recorded_at": "2026-11-24T16:16:42.802Z",
+  "inputs": {
+    "branch": "feat/tru-11-every-repo-refresh",
+    "commit": "e0244e7",
+    "build_record": ".sdlc/records/TRU-11/build-1.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-11/build-1.json says pass at 8263597"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 8263597"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at e0244e7"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged e0244e7"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-5, AC-6, AC-7"
+    },
+    {
+      "name": "criteria_met",
+      "pass": false,
+      "detail": "AC-6 is not_met (Happy path works. The Linear proxy changed TRU-11's Stage to Blocked at 15:34:21 with the native app running. The server read it at 15:34:33 and the app showed it at 15:35:02, 41 s later, with no reload (03-after-4.png; still unchanged at 03-after-3.png, 15:34:52). A second change, to PR review at 15:59:32, showed by 16:00:06 while GitHub was failing. 'Last refreshed N min ago' is shown, but it gives the age of the oldest source. Without a token that was GitHub, so it read 27-39 min while Linear changes landed within a minute. It fails a case the author's tests don't cover: a read the server never answers. With a listener on :8080 that accepts and never responds, the app's read stayed in flight from 16:05:00 past 16:08:00, Refresh stayed disabled, and no further reads were sent. ehttp 0.7.3's fetch() sets no timeout: fetch_raw_native(true) skips timeout_recv_body. The real server was then brought back at 16:09:11 with TRU-11 changed to Rollout. At 16:11:41 the app still showed PR review, the old 'Couldn't refresh ... Connection refused' text and a disabled Refresh (11-stuck-after-server-back.png). It updated only after the held connection was closed (12-released.png). One stalled read freezes the board until the app is restarted, so it doesn't keep itself current without the owner's action. The 'a PR's checks finish' part is claimed only with GITHUB_TOKEN. Without one, GitHub was read at 15:32:39 and next at 15:59:19 (about 27 min, spaced by cost), so a finished check would not show within 2 minutes tokenless. The with-token behaviour is covered only by the fake-backed test.)"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "14 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "7 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:every_repo_in_the_settings_is_covered passed: cargo test -p board-server --test sources -- --exact every_repo_in_the_settings_is_covered"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board -- --exact needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:the_board_refreshes_itself_every_30_seconds passed: cargo test -p board-app --test board -- --exact the_board_refreshes_itself_every_30_seconds"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:with_a_token_finished_checks_show_on_the_next_minutes_read passed: cargo test -p board-server --test sources -- --exact with_a_token_finished_checks_show_on_the_next_minutes_read"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board -- --exact needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "rerun:AC-7",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:a_failing_source_keeps_its_data_and_the_others_keep_updating passed: cargo test -p board-server --test sources -- --exact a_failing_source_keeps_its_data_and_the_others_keep_updating"
+    },
+    {
+      "name": "rerun:AC-7",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:a_failed_read_keeps_the_board_it_had passed: cargo test -p board-app --test board -- --exact a_failed_read_keeps_the_board_it_had"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "1 open: crates/app/src/main.rs fetch(): the snapshot request has no timeout. ehttp 0.7.3's fetch() calls fetch_raw_native(true), which sets no timeout. A read the server never answers stays in flight forever: due() never fires again and Refresh stays disabled. Observed: with a listener holding the connection from 16:05, and the real server back at 16:09:11 with a new stage, the app still showed the old stage at 16:11:41. AC-6 isn't met after one stalled read. Setting a timeout on the request, e.g. Request::with_timeout or a deadline on in_flight, would fix it."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "open",
+      "summary": "crates/app/src/main.rs fetch(): the snapshot request has no timeout. ehttp 0.7.3's fetch() calls fetch_raw_native(true), which sets no timeout. A read the server never answers stays in flight forever: due() never fires again and Refresh stays disabled. Observed: with a listener holding the connection from 16:05, and the real server back at 16:09:11 with a new stage, the app still showed the old stage at 16:11:41. AC-6 isn't met after one stalled read. Setting a timeout on the request, e.g. Request::with_timeout or a deadline on in_flight, would fix it."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/src/lib.rs board(): 'Last refreshed N min ago' is the oldest source's last_good. Without a token that is GitHub, so it read '27 min ago' to '39 min ago' while Linear changes were landing within a minute, and while the app itself had just read the snapshot. The wording suggests the board hasn't refreshed. Consider naming what the age is for, or showing the app's own last read."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/src/lib.rs board(): a stale source's line isn't wrapped. GitHub's error ran past the 2000 px window and was cut off mid-text ('kept its PRs from an ea...')."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "AC-7 names the cluster, but the server has no cluster source yet (only linear and github), so that part is unexercised. The Linear and GitHub parts were verified live."
+    }
+  ],
+  "decision": "Back to Build: fix, pass the Build gate again, then re-verify",
+  "evidence": [
+    "AC-5 test crates/server/tests/sources.rs:every_repo_in_the_settings_is_covered: PASS; FAILS with pr_for's `&& p.repo == issue.repo` removed, and FAILS with the lists read per repo between details again",
+    "AC-5 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS (checks that the card shows bbooth/sdlc-board)",
+    "AC-5 e2e board-server with board.toml + board-app under Xvfb; verify1-tru11/01-start.png: 15:34:10: TRU-8 (bbooth/sdlc-board, Plan round 2: pass, children TRU-11..14) in Build; TRU-6 and TRU-7 (bbooth/booking, Rollout round 1: pass, PR #49 and #53 merged) in Outcome",
+    "AC-5 e2e board-server with BOARD_CONFIG=verify1-tru11/board3.toml (third repo bbooth/lab-notebook): after a restart, log 'serving repos=3'; the Linear proxy saw project 'Lab notebook'; GitHub GET /repos/bbooth/lab-notebook/pulls (403 via egress) reported as 'PR lists failed for bbooth/lab-notebook'",
+    "AC-6 test crates/app/tests/board.rs:the_board_refreshes_itself_every_30_seconds: PASS; FAILS with REFRESH set to 60 s and FAILS with due() ignoring in_flight",
+    "AC-6 test crates/server/tests/sources.rs:with_a_token_finished_checks_show_on_the_next_minutes_read: PASS",
+    "AC-6 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS; FAILS when 'Last refreshed' uses the newest source (max) instead of the oldest",
+    "AC-6 e2e Linear proxy Stage override flip TRU-11 Build->Blocked with the app running; 02-before-flip.png, 03-after-1..16.png, flip.log: flip 15:34:21; the app showed Blocked (and Needs you: Blocked TRU-11) at 15:35:02, 41 s, no reload",
+    "AC-6 e2e hung read: a listener on :8080 that accepts and never answers, then the real server back on :8080; 09c.png, 10c.png, 11-stuck-after-server-back.png, 12-released.png: read in flight from 16:05:00 with no timeout; Refresh disabled; with the server back from 16:09:11 (TRU-11=Rollout) the app still showed PR review at 16:11:41; it recovered only after the held socket was closed",
+    "AC-7 test crates/server/tests/sources.rs:a_failing_source_keeps_its_data_and_the_others_keep_updating: PASS; FAILS with the error dropped, with the data cleared, and with last_good moved forward on failure",
+    "AC-7 test crates/app/tests/board.rs:a_failed_read_keeps_the_board_it_had: PASS; FAILS with take() clearing the snapshot on Err",
+    "AC-7 e2e GitHub proxy returning 500 at the next GitHub read (15:59:19), Linear Stage flip at 15:59:32; 05-ghdown-*.png, flip2.log: PRs kept, github stale with last good read 15:32 UTC and the 500 error; TRU-11 showed PR review by 16:00:06",
+    "AC-7 e2e Linear proxy returning 500; 04-linear-down.png: cards kept; 'linear is stale (last good read 15:36 UTC, 2 min ago): ... 500 ...'",
+    "AC-7 e2e board-server stopped with the app running; 08-server-down.png: board kept; 'Couldn't refresh from http://127.0.0.1:8080: io: Connection refused (os error 111)'"
+  ]
+}

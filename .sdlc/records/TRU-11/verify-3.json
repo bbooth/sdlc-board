@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-11",
+  "round": 3,
+  "result": "fail",
+  "recorded_at": "2026-11-24T18:09:49.355Z",
+  "inputs": {
+    "branch": "feat/tru-11-every-repo-refresh",
+    "commit": "4c0f554",
+    "build_record": ".sdlc/records/TRU-11/build-3.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-11/build-3.json says pass at e25a061"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since e25a061"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 4c0f554"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 4c0f554"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-5, AC-6, AC-7"
+    },
+    {
+      "name": "criteria_met",
+      "pass": false,
+      "detail": "AC-7 is not_met (A Linear project that fails from the server's first read gets the wrong last good read. I ran a second server with the Linear proxy giving a GraphQL error for 'SDLC board' from the start. On the first read the app showed 'linear is stale (last good read 17:41 UTC, 7 s ago): 1 of 2 repos failed ... (no earlier tickets)'. On the next read, booking still read fine and the project still failed. The app then showed 'Last refreshed: ... linear 498761 h ago' and 'linear is stale (last good read 00:00 UTC, 498761 h ago): ... (kept its tickets from an earlier read)' (06-nevergood.png). It has no earlier tickets. A probe test in the scratch worktree did the same: last_good went Some(now), then Some(0), Some(0) (probe-never-good.log). The cause is in crates/server/src/linear.rs read(): a failed read with no earlier entry stores `last.unwrap_or_default()`, i.e. (0, []), so the next failure finds an entry. Otherwise AC-7 holds live. One project failing: from 17:36:42 the proxy failed 'SDLC board' only, and three reads failed (17:37:30, 17:38:30, 17:39:31). The app kept TRU-8 and TRU-11 (Blocked, though Linear's value was then Rollout). Booking kept updating: TRU-6 moved to PR review at 17:37:33. Linear's shown last good read stayed at '17:36 UTC' throughout and the age grew to 3 min (04-proj-18c.png, proj.log). After I removed the failure, the 17:40:32 read showed TRU-11 at Rollout and the error cleared. GitHub failing: injected 500s from 17:41. The 18:00:13 read failed, PRs #49 and #53 stayed, and the app showed 'github is stale (last good read 17:33 UTC, 27 min ago): ... 500 ...' while Linear kept updating (09-ghdown-6.png). With the server stopped, the app kept its board and showed 'Couldn't refresh ... Connection refused (os error 111)' (13-down-hold-back.png). The cluster part couldn't be exercised: the server has no cluster source yet.)"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "17 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "8 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:every_repo_in_the_settings_is_covered passed: cargo test -p board-server --test sources -- --exact every_repo_in_the_settings_is_covered"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board -- --exact needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:the_board_refreshes_itself_every_30_seconds passed: cargo test -p board-app --test board -- --exact the_board_refreshes_itself_every_30_seconds"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:ages_go_by_the_servers_clock passed: cargo test -p board-app --test board -- --exact ages_go_by_the_servers_clock"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:with_a_token_finished_checks_show_on_the_next_minutes_read passed: cargo test -p board-server --test sources -- --exact with_a_token_finished_checks_show_on_the_next_minutes_read"
+    },
+    {
+      "name": "rerun:AC-7",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates passed: cargo test -p board-server --test sources -- --exact one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates"
+    },
+    {
+      "name": "rerun:AC-7",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:a_failing_source_keeps_its_data_and_the_others_keep_updating passed: cargo test -p board-server --test sources -- --exact a_failing_source_keeps_its_data_and_the_others_keep_updating"
+    },
+    {
+      "name": "rerun:AC-7",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:a_failed_read_keeps_the_board_it_had passed: cargo test -p board-app --test board -- --exact a_failed_read_keeps_the_board_it_had"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "1 open: crates/server/src/linear.rs read(): when a repo's read fails and it has no earlier tickets, `last.unwrap_or_default()` stores (0, []) as that repo's last read. On the next failure, `last.is_some()` is true, so the error says '(kept its tickets from an earlier read)' and as_of becomes Some(0). Linear's last_good is then 0. Observed live: a project failing from server start showed 'linear 498761 h ago' and 'last good read 00:00 UTC' on its second read, while the other repo read fine (06-nevergood.png). A probe test gave last_good Some(now), then Some(0), Some(0) (probe-never-good.log). AC-7's 'time of its last good read' is wrong here, and so is AC-6's 'when its data was last refreshed'."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "open",
+      "summary": "crates/server/src/linear.rs read(): when a repo's read fails and it has no earlier tickets, `last.unwrap_or_default()` stores (0, []) as that repo's last read. On the next failure, `last.is_some()` is true, so the error says '(kept its tickets from an earlier read)' and as_of becomes Some(0). Linear's last_good is then 0. Observed live: a project failing from server start showed 'linear 498761 h ago' and 'last good read 00:00 UTC' on its second read, while the other repo read fine (06-nevergood.png). A probe test gave last_good Some(now), then Some(0), Some(0) (probe-never-good.log). AC-7's 'time of its last good read' is wrong here, and so is AC-6's 'when its data was last refreshed'."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/tests/sources.rs:one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates makes only one failing read. A mutant that restamps the kept tickets with now() on each failure (`last.map(|(_, i)| (now(), i))`) still passes, though it moves last_good forward from the second failure on. The real code held 17:36:29 across three live failures."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/tests/board.rs:ages_go_by_the_servers_clock finishes only one read. A mutant that keeps the first read's `got` (`self.got.or(Some(Instant::now()))`) passes, though later snapshots would then show ages too large. Likewise, nothing checks that a same-repo sub-ticket doesn't name its repo: `if true` passes sub_tickets_are_drawn_under_their_ticket_with_their_stages."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Carried from round 2, still observed: a GitHub source with no good read yet says 'github is stale (no good read yet): ... (kept its PRs from an earlier read)' (06-nevergood.png). Still no test covers the ureq request deadline or the stale line's wrapping. Both were observed working live."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "AC-7 names the cluster, but the server has no cluster source yet, so that part is unexercised. AC-6's 'PR checks finish within 2 minutes' holds only with GITHUB_TOKEN: tokenless, GitHub reads were 27 min apart (17:33:28, then 18:00:13), as docs/STATUS.md says. The device-clock check used an LD_PRELOAD CLOCK_REALTIME shim (verify3-tru11/scripts/fakeclock.c) because libfaketime isn't installed."
+    }
+  ],
+  "decision": "Back to Build: fix, pass the Build gate again, then re-verify",
+  "evidence": [
+    "AC-5 test crates/server/tests/sources.rs:every_repo_in_the_settings_is_covered: PASS; FAILS with `&& p.repo == issue.repo` removed from pr_for, and FAILS with each repo's list read between details again",
+    "AC-5 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS; FAILS with the sub-ticket repo label hidden (`if c.repo != t.repo` -> `if false`)",
+    "AC-5 e2e board-server with board.toml + board-app under Xvfb; verify3-tru11/01-start.png, 08-reparent.png: TRU-8 (bbooth/sdlc-board) in Build with TRU-11..14 nested; TRU-6 and TRU-7 (bbooth/booking, Rollout round 1: pass, PR #49 and #53 merged); TRU-6 reparented under TRU-8 shows 'bbooth/booking' next to its stage",
+    "AC-5 e2e board-server with BOARD_CONFIG=verify3-tru11/board3.toml; server3.log, linproxy3.log, ghproxy3.log: 'serving repos=3'; Linear queried for project 'Lab notebook' at 18:07:30; GitHub pulls requested for bbooth/booking, bbooth/sdlc-board and bbooth/lab-notebook",
+    "AC-6 test crates/app/tests/board.rs:the_board_refreshes_itself_every_30_seconds: PASS; FAILS with waiting() without the GIVE_UP deadline, with finish() taking any answer, and with REFRESH at 60 s",
+    "AC-6 test crates/app/tests/board.rs:ages_go_by_the_servers_clock: PASS; FAILS with server_now() not adding the time since the snapshot came back",
+    "AC-6 test crates/server/tests/sources.rs:with_a_token_finished_checks_show_on_the_next_minutes_read: PASS",
+    "AC-6 e2e Linear proxy Stage override with the app running; flip.log, 03strip.png, 09strip.png: Blocked flipped 17:34:29, shown 17:35:50 (81 s); PR review flipped 18:00:23 with GitHub failing, shown 18:01:24 (61 s); no reload",
+    "AC-6 e2e app with device clock -3 h and +3 h (LD_PRELOAD CLOCK_REALTIME shim); 02-clock.png, 01-start.png: new app: 'github 50 s ago, linear 51 s ago' at both offsets; round-2 app (a1b4681) at +3 h: 'github 3 h ago, linear 3 h ago'",
+    "AC-6 e2e held connection then real server back; events.log, hang.log, watch.log, 11-hold-*.png, 12-back-*.png, 13-down-hold-back.png: while held: 'Reading…' then 'timeout: global', a read every ~30 s, threads 24-25 and sockets 3-4 with no growth; server back 18:05:33 with 4 connections still held: error cleared by 18:05:49, TRU-11=Rollout shown",
+    "AC-7 test crates/server/tests/sources.rs:one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates: PASS; FAILS with the kept tickets dropped, with as_of not set, with any repo error failing the whole read, and with the partial error dropped; PASSES (does not catch) with the kept tickets' read time moved to now on each failure",
+    "AC-7 test crates/server/tests/sources.rs:a_failing_source_keeps_its_data_and_the_others_keep_updating: PASS; FAILS with the error dropped, with the data cleared, and with last_good moved forward on failure",
+    "AC-7 test crates/app/tests/board.rs:a_failed_read_keeps_the_board_it_had: PASS; FAILS with finish() clearing the snapshot on Err",
+    "AC-7 e2e second server (boardb.toml, :8090), Linear proxy failing 'SDLC board' from the start; 06-nevergood.png, server-b.log: first read: 'last good read 17:41 UTC ... (no earlier tickets)'; next read: 'linear 498761 h ago', 'last good read 00:00 UTC, 498761 h ago ... (kept its tickets from an earlier read)'",
+    "AC-7 e2e Linear proxy failing 'SDLC board' only for three reads; proj.log, 04-proj-18c.png, linproxy.log: TRU-8/TRU-11 kept; booking's TRU-6 moved to PR review; linear last_good stayed 17:36:29 across reads at 17:37:30, 17:38:30, 17:39:31; '1 of 2 repos failed, first: Linear issues for SDLC board: ... (kept its tickets from an earlier read)'",
+    "AC-7 e2e GitHub proxy returning 500; 09-ghdown-6.png: PRs kept; 'github is stale (last good read 17:33 UTC, 27 min ago)' with the 500; Linear change shown 61 s after the flip",
+    "AC-7 e2e board-server stopped with the app running; 10-server-down.png: board kept; 'Couldn't refresh from http://127.0.0.1:8080: io: Connection refused (os error 111)'"
+  ]
+}

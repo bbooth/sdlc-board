@@ -12,6 +12,14 @@ web, to one person, and no client may hold a Linear or GitHub token.
 - `crates/api` holds the snapshot types for the server and the app.
 - One eframe app is built natively, for wasm (served by the server) and for
   Android, fetching with `ehttp`, which works on all three.
+  - Amended by TRU-11: native builds fetch with `ureq` and a 20 s deadline
+    on the whole call, because `ehttp`'s native GET has none before the
+    response headers and a server that never answered froze the board. There
+    is no wasm entry yet (TRU-12 adds it); it will fetch with `ehttp` (the
+    browser's fetch) behind a `target_arch` cfg, which is why `ureq` is a
+    native-only dependency. The app's refresh logic (`board_app::Reads`)
+    keeps time with `web_time::Instant`, which is std's natively and the
+    browser's clock on wasm, where `std::time::Instant::now` panics.
 - Access is Cloudflare Access (a browser login, or a service token from the
   native and Android builds), and the server checks Access's signed header
   itself, so a request that skips Access gets nothing.

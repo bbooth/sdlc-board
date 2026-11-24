@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-11",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-24T16:24:15.546Z",
+  "inputs": {
+    "branch": "feat/tru-11-every-repo-refresh",
+    "commit": "5e57493"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-11-every-repo-refresh"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "13 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "3 test files changed with 4 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "334 lines changed, counting 242 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 5e57493"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "7 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/app/src/main.rs fetch() (Verify round 1): the snapshot request has no timeout; a read the server never answers stays in flight forever and the board freezes.",
+      "reason": "The app reads with ureq and timeout_global(20 s) (main.rs fetch), and board_app::Reads gives up on an unanswered read so the next starts when due. Live: against a listener that accepts and never answers, the app sent a read every ~30 s (16:22:13, :44, 16:23:14, :45) and after 100 s held no open socket to it."
+    },
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/app/src/main.rs:34: the snapshot GET still has no timeout (constitution: every call that leaves the process has one); each given-up read leaves its ehttp thread and socket alive.",
+      "reason": "Same fix: ehttp replaced by ureq with a 20 s global timeout, so the call itself ends. Observed 0 board-app sockets to the held listener after 4 reads."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/app/src/main.rs:58: Refresh does nothing while a read under 20 s old is unanswered, with no sign on screen.",
+      "reason": "While Reads::waiting the button is disabled and reads 'Reading…'."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/app/src/lib.rs:41-48: finish() drops every answer except the latest read's, even a good one when the latest hangs.",
+      "reason": "finish() takes any answer newer than the last answered read; the test covers a given-up read's answer counting while a later read is still waiting."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Verify round 1: 'Last refreshed' showed the age of the oldest source, so tokenless GitHub hid how current Linear was.",
+      "reason": "It now lists each source's age: 'Last refreshed: linear 0 s ago, github 10 min ago'."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Verify round 1: the stale-source line doesn't wrap, so GitHub's error is cut off at the window edge.",
+      "reason": "The line is a wrapping Label."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Verify round 1: AC-7 names the cluster, but the server has no cluster source yet (it comes with TRU-14), so that part couldn't be tested."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}

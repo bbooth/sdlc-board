@@ -582,8 +582,9 @@ dependencies = [
  "board-api",
  "eframe",
  "egui_kittest",
- "ehttp",
  "serde_json",
+ "ureq",
+ "web-time",
 ]
 
 [[package]]
@@ -1095,20 +1096,6 @@ dependencies = [
  "skrifa",
  "sys-locale",
  "unicode-script",
-]
-
-[[package]]
-name = "ehttp"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d1c51126a4e8242c5b3bcd4c5b350ed3540f0c13c10e0c3c840a3833fa3474c"
-dependencies = [
- "document-features",
- "js-sys",
- "ureq",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]

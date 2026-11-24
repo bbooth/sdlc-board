@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-11",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-24T18:57:00.926Z",
+  "inputs": {
+    "branch": "feat/tru-11-every-repo-refresh",
+    "commit": "f3b4d14",
+    "verify_record": ".sdlc/records/TRU-11/verify-4.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-11/verify-4.json says pass at c234138"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since c234138"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at f3b4d14"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read f3b4d14"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "5 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "0 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "0 blocking findings refuted, 5 minor carried to the PR"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:84: when a repo's Linear read fails and it has never had a good read (e.g. a newly added third repo with a wrong linear_team that returns a GraphQL error), it adds nothing to `as_of`. sources.rs:142 then sets linear's last_good to now() whenever any other repo read fine. Each minute the board shows 'linear is stale (last good read <now>, 5 s ago)' for data that was never read, and board_source_age_seconds{source=\"linear\"} stays near 0, so an age alert never fires. Only the error text '(no earlier tickets)' and board_source_read_errors_total show it.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:66: GitHub's as_of is the oldest read_at among the PRs returned. A repo whose PR list fails and has no kept PRs (never read, or its last good read had no ticket PRs) adds no date. last_good then becomes the other repos' fresh read time, and the stale marker and the age gauge report that repo's missing PRs as fresh. This is the same gap as the Linear one, on the GitHub side.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:53: BoardApp::ui got new states in this diff and no test renders them: the 'Reading…' label and the disabled Refresh button while a read is waiting, the top-bar 'Couldn't refresh from <url>: …' over a kept board, and the 'No board yet' panel. The tests in crates/app/tests/board.rs check Reads and board() on their own, so nothing checks that ui() connects them. For example, nothing would catch the button staying disabled after a read gives up, or the kept board being swapped for the error text.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:142 with crates/server/src/linear.rs:76-80: suppose one repo's Linear project fails on its first read, or on any read since the server started (a misspelt or new third-repo linear_project that errors, or a 5xx right after the restart AC-5 needs). That repo has no kept tickets, so as_of stays None and last_good becomes now. The app (crates/app/src/lib.rs:91) then shows 'Last refreshed: linear 0 s ago' while that repo's tickets are missing entirely. The stale line reads 'linear is stale (last good read <now>, 0 s ago): 1 of 2 repos failed … (no earlier tickets)'. That line contradicts itself, and the 'Last refreshed' line tells the owner Linear is current.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:91: right after a server restart (which AC-5 needs to add a repo), State has no sources until each first read completes. If the app reads the snapshot then, it shows 'Last refreshed: ' with nothing after it and every column at (0), with no stale or loading marker. That looks the same as 'no tickets', and the app keeps showing it until its next read up to 30 s later. Showing that no source has reported yet when snap.sources is empty would tell the two apart.",
+      "status": "open",
+      "scope": "web"
+    }
+  ],
+  "decision": "Open the PR and advance to PR review",
+  "evidence": []
+}

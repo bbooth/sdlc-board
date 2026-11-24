@@ -19,6 +19,8 @@ const RECENT: &str = "20";
 /// ticket its branch (or else its title) names.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrInfo {
+    /// The repo it was opened in (GitHub `owner/name`): a ticket's PRs come from its own repo.
+    pub repo: String,
     pub ticket: String,
     pub pr: Pr,
     pub draft: bool,
@@ -110,12 +112,24 @@ impl GitHub {
     pub async fn prs(&self) -> PrRead {
         let mut read = PrRead::default();
         self.this_read.store(0, Ordering::Relaxed);
+        // Every repo's lists come first, so one repo's PRs can't spend the
+        // budget before a later repo is listed at all.
+        let mut lists = Vec::new();
         for repo in &self.repos {
+            lists.push(self.pulls(repo).await);
+        }
+        for (repo, pulls) in self.repos.iter().zip(lists) {
             let last = self.last.lock().unwrap_or_else(|e| e.into_inner()).get(&repo.name).cloned();
-            let prs = self.repo_prs(repo, last.as_deref().unwrap_or_default(), &mut read.errors).await;
+            let prs = match pulls {
+                Ok(pulls) => {
+                    Ok(self.repo_prs(repo, &pulls, last.as_deref().unwrap_or_default(), &mut read.errors).await)
+                }
+                Err(e) => Err(e),
+            };
             let prs = match prs {
                 Ok(prs) => {
                     read.repos_read += 1;
+                    self.last.lock().unwrap_or_else(|e| e.into_inner()).insert(repo.name.clone(), prs.clone());
                     prs
                 }
                 Err(e) => {
@@ -123,16 +137,17 @@ impl GitHub {
                     read.repos_failed.push(repo.name.clone());
                     let kept = if last.is_some() { "kept its PRs from an earlier read" } else { "no earlier PRs" };
                     read.errors.push(format!("{e} ({kept})"));
+                    // Only a good read is kept, so "kept its PRs" means there were some.
                     last.unwrap_or_default()
                 }
             };
-            self.last.lock().unwrap_or_else(|e| e.into_inner()).insert(repo.name.clone(), prs.clone());
             read.prs.extend(prs);
         }
         read
     }
 
-    async fn repo_prs(&self, repo: &Repo, last: &[PrInfo], errors: &mut Vec<String>) -> anyhow::Result<Vec<PrInfo>> {
+    /// The repo's open PRs, then its recently merged ones.
+    async fn pulls(&self, repo: &Repo) -> anyhow::Result<Vec<Value>> {
         let pulls = format!("/repos/{}/pulls", repo.name);
         let open = self.get(&pulls, &[("state", "open"), ("per_page", "100")]).await?;
         let recent = [("state", "closed"), ("sort", "updated"), ("direction", "desc"), ("per_page", RECENT)];
@@ -140,8 +155,12 @@ impl GitHub {
         // A repo that isn't there (renamed, or private without a token) is an error, not an empty one.
         anyhow::ensure!(open.is_some() && closed.is_some(), "GitHub {pulls}: not found");
         let merged = list(&closed).filter(|p| !p["merged_at"].is_null());
+        Ok(list(&open).chain(merged).cloned().collect())
+    }
+
+    async fn repo_prs(&self, repo: &Repo, pulls: &[Value], last: &[PrInfo], errors: &mut Vec<String>) -> Vec<PrInfo> {
         let mut out = Vec::new();
-        for p in list(&open).chain(merged) {
+        for p in pulls {
             // Anyone can open a PR from a fork, so only the repo's own branches
             // count. GitHub names are case-insensitive.
             let from = p["head"]["repo"]["full_name"].as_str().unwrap_or_default();
@@ -149,7 +168,7 @@ impl GitHub {
                 out.extend(self.pr_info(repo, p, last, errors).await);
             }
         }
-        Ok(out)
+        out
     }
 
     /// One PR's checks and gate. A failed checks read keeps the last read's
@@ -197,7 +216,7 @@ impl GitHub {
         let url = p["html_url"].as_str().unwrap_or_default().into();
         let pr = Pr { number, title: title.into(), url, checks, merged };
         let (draft, by_branch, at) = (p["draft"] == true, on_branch.is_some(), at.into());
-        Some(PrInfo { ticket, pr, draft, by_branch, gate, at, gate_read, read_at })
+        Some(PrInfo { repo: repo.name.clone(), ticket, pr, draft, by_branch, gate, at, gate_read, read_at })
     }
 
     /// File names don't say which gate came last, so this reads each stage's

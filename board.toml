@@ -3,3 +3,8 @@ name = "bbooth/booking"
 linear_team = "TRU"
 linear_project = "Booking"
 
+
+[[repos]]
+name = "bbooth/sdlc-board"
+linear_team = "TRU"
+linear_project = "SDLC board"

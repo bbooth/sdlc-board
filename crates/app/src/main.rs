@@ -2,10 +2,10 @@
 //! holds a Linear or GitHub token.
 
 use board_api::Snapshot;
+use board_app::Reads;
 use eframe::egui;
 use std::sync::{Arc, Mutex};
-
-type Shared = Arc<Mutex<Option<Result<Snapshot, String>>>>;
+use std::time::{Duration, Instant};
 
 fn main() -> eframe::Result {
     let url = std::env::var("BOARD_URL").unwrap_or_else(|_| "http://localhost:8080".into());
@@ -15,28 +15,35 @@ fn main() -> eframe::Result {
             viewport: egui::ViewportBuilder::default().with_inner_size([2000.0, 700.0]),
             ..Default::default()
         },
-        Box::new(move |cc| {
-            let app = BoardApp { url, latest: Shared::default() };
-            app.fetch(cc.egui_ctx.clone());
-            Ok(Box::new(app))
-        }),
+        Box::new(move |_| Ok(Box::new(BoardApp { url, reads: Arc::default() }))),
     )
 }
 
 struct BoardApp {
     url: String,
-    latest: Shared,
+    reads: Arc<Mutex<Reads>>,
 }
 
 impl BoardApp {
-    fn fetch(&self, ctx: egui::Context) {
-        let latest = self.latest.clone();
-        let req = ehttp::Request::get(format!("{}/v1/snapshot", self.url.trim_end_matches('/')));
-        ehttp::fetch(req, move |res| {
-            let parsed = res
-                .and_then(|r| if r.ok { Ok(r) } else { Err(format!("{} {}", r.status, r.status_text)) })
-                .and_then(|r| serde_json::from_slice::<Snapshot>(&r.bytes).map_err(|e| e.to_string()));
-            *latest.lock().unwrap_or_else(|e| e.into_inner()) = Some(parsed);
+    /// Reads the snapshot if one is due, or now if `asked` and none is waiting.
+    fn fetch(&self, ctx: &egui::Context, asked: bool) {
+        let Some(n) = self.reads.lock().unwrap_or_else(|e| e.into_inner()).start(Instant::now(), asked) else {
+            return;
+        };
+        let (reads, ctx) = (self.reads.clone(), ctx.clone());
+        let url = format!("{}/v1/snapshot", self.url.trim_end_matches('/'));
+        // The whole call has a deadline, so a server that never answers can't
+        // hold a thread and a socket open. The web build fetches with ehttp
+        // (ADR 0001); natively ehttp has no deadline before the headers.
+        let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(board_app::GIVE_UP)).build().into();
+        std::thread::spawn(move || {
+            let parsed = agent
+                .get(&url)
+                .call()
+                .and_then(|r| r.into_body().read_to_vec())
+                .map_err(|e| e.to_string())
+                .and_then(|b| serde_json::from_slice::<Snapshot>(&b).map_err(|e| e.to_string()));
+            reads.lock().unwrap_or_else(|e| e.into_inner()).finish(n, parsed);
             ctx.request_repaint();
         });
     }
@@ -45,22 +52,31 @@ impl BoardApp {
 impl eframe::App for BoardApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let latest = self.latest.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        self.fetch(&ctx, false);
+        // Wake up to tick the ages and to read again when due.
+        ctx.request_repaint_after(Duration::from_secs(1));
+        let (snap, problem, waiting, now) = {
+            let r = self.reads.lock().unwrap_or_else(|e| e.into_inner());
+            let t = Instant::now();
+            (r.snap.clone(), r.problem(t), r.waiting(t), r.server_now(t).unwrap_or(0))
+        };
         egui::Panel::top("bar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("SDLC board");
-                if ui.button("Refresh").clicked() {
-                    self.fetch(ctx.clone());
+                let label = if waiting { "Reading…" } else { "Refresh" };
+                if ui.add_enabled(!waiting, egui::Button::new(label)).clicked() {
+                    self.fetch(&ctx, true);
+                }
+                if let Some(e) = &problem {
+                    let msg = format!("Couldn't refresh from {}: {e}", self.url);
+                    ui.colored_label(ui.visuals().error_fg_color, msg);
                 }
             });
         });
-        egui::CentralPanel::default().show(ui, |ui| match &latest {
-            None => drop(ui.label(format!("Loading from {}…", self.url))),
-            Some(Err(e)) => {
-                let msg = format!("Couldn't load the board from {}: {e}", self.url);
-                ui.colored_label(ui.visuals().error_fg_color, msg);
-            }
-            Some(Ok(snap)) => board_app::board(ui, snap),
+        egui::CentralPanel::default().show(ui, |ui| match (&snap, &problem) {
+            (Some(snap), _) => board_app::board(ui, snap, now),
+            (None, Some(_)) => drop(ui.label("No board yet: the next read is due within 30 s.")),
+            (None, None) => drop(ui.label(format!("Loading from {}…", self.url))),
         });
     }
 }

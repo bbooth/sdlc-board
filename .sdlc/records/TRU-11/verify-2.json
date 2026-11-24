@@ -1,0 +1,144 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-11",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-24T17:11:37.148Z",
+  "inputs": {
+    "branch": "feat/tru-11-every-repo-refresh",
+    "commit": "a1b4681",
+    "build_record": ".sdlc/records/TRU-11/build-2.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-11/build-2.json says pass at 5e57493"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 5e57493"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at a1b4681"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged a1b4681"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-5, AC-6, AC-7"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "15 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "7 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:every_repo_in_the_settings_is_covered passed: cargo test -p board-server --test sources -- --exact every_repo_in_the_settings_is_covered"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board -- --exact needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:the_board_refreshes_itself_every_30_seconds passed: cargo test -p board-app --test board -- --exact the_board_refreshes_itself_every_30_seconds"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board -- --exact needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:with_a_token_finished_checks_show_on_the_next_minutes_read passed: cargo test -p board-server --test sources -- --exact with_a_token_finished_checks_show_on_the_next_minutes_read"
+    },
+    {
+      "name": "rerun:AC-7",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:a_failing_source_keeps_its_data_and_the_others_keep_updating passed: cargo test -p board-server --test sources -- --exact a_failing_source_keeps_its_data_and_the_others_keep_updating"
+    },
+    {
+      "name": "rerun:AC-7",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:a_failed_read_keeps_the_board_it_had passed: cargo test -p board-app --test board -- --exact a_failed_read_keeps_the_board_it_had"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "4 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/src/main.rs fetch(): no test covers the ureq request deadline (timeout_global(Some(GIVE_UP))). A mutant with timeout_global(None) passes every test. In the held-connection e2e it leaked a thread and a socket per unanswered read: threads went 24 to 26 and 2 connections were left ESTABLISHED. Only the e2e shows the deadline matters."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/tests/board.rs: no test covers the stale line's wrapping. Replacing .wrap() with .truncate() still passes needs_you_is_listed_first_and_cards_show_their_gate_and_pr. Wrapping was observed live in a 1200 px window (10-narrow.png)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "A restarted server whose first GitHub read fails says 'github is stale (no good read yet): ... (kept its PRs from an earlier read)', but it has no earlier read and shows no PRs (08strip.png, 10-narrow.png). The suffix should depend on there being earlier data."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "AC-7 names the cluster, but the server has no cluster source yet (only linear and github), so that part is unexercised. AC-6's 'PR checks finish within 2 minutes' holds only with GITHUB_TOKEN. Tokenless, GitHub reads were 27 min apart (16:28:38, then 16:55:18); docs/STATUS.md says so."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-5 test crates/server/tests/sources.rs:every_repo_in_the_settings_is_covered: PASS; FAILS with `&& p.repo == issue.repo` removed from pr_for, and FAILS with each repo's list read between details again",
+    "AC-5 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS (the card shows bbooth/sdlc-board)",
+    "AC-5 e2e board-server with board.toml + board-app under Xvfb; verify2-tru11/01-start.png: TRU-8 (bbooth/sdlc-board, Plan round 2: pass, TRU-11 Build round 2: pass, children TRU-11..14) in Build; TRU-6 and TRU-7 (bbooth/booking, Rollout round 1: pass, PR #49 and #53 merged) in Outcome",
+    "AC-5 e2e board-server with BOARD_CONFIG=verify2-tru11/board3.toml; server4.log, linproxy.log: after a restart: 'serving repos=3'; the Linear proxy saw project 'Lab notebook' at 17:07:58; the GitHub read named bbooth/booking, bbooth/sdlc-board and bbooth/lab-notebook",
+    "AC-6 test crates/app/tests/board.rs:the_board_refreshes_itself_every_30_seconds: PASS. FAILS with each of these mutants: waiting() without the GIVE_UP deadline, finish() taking any answer regardless of order, start() ignoring `asked`, start() ignoring waiting(), problem() hiding 'no answer', REFRESH at 60 s, GIVE_UP at 60 s",
+    "AC-6 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS; FAILS when 'Last refreshed' lists only one source",
+    "AC-6 test crates/server/tests/sources.rs:with_a_token_finished_checks_show_on_the_next_minutes_read: PASS",
+    "AC-6 e2e Linear proxy Stage override with the app running; flip.log, flipstrip.png, 04-tru11-col.png: Blocked flipped at 16:29:11, shown at 16:29:51 (40 s); PR review flipped at 16:55:26 with GitHub failing, shown at 16:56:27 (61 s); no reload",
+    "AC-6 e2e held connection then real server back; hang.log, watch.log, events.log, 07strip.png, 08strip.png: while held: 'Reading…' disabled for 20 s, then 'no answer for 20 s' / 'timeout: global', a new read every 30 s, threads 24-25 and sockets 2-3 with no growth; server back at 17:03:12 while 6 connections were still held: TRU-11=Rollout shown by 17:03:43",
+    "AC-6 e2e mutant app with timeout_global(None), same held-connection run; watch-mut.log, 09-mutant-stuck.png: the board recovered, but threads went 24 to 26 and sockets 2 to 4, with 2 connections to :8080 left ESTABLISHED: the real build's request deadline is what prevents the leak",
+    "AC-7 test crates/server/tests/sources.rs:a_failing_source_keeps_its_data_and_the_others_keep_updating: PASS; FAILS with the error dropped, with the data cleared, and with last_good moved forward on failure",
+    "AC-7 test crates/app/tests/board.rs:a_failed_read_keeps_the_board_it_had: PASS; FAILS with finish() clearing the snapshot on Err",
+    "AC-7 e2e Linear proxy returning 500; 03-linear-down.png: cards kept; 'linear is stale (last good read 16:31 UTC, 1 min ago): Linear issues for Booking: HTTP status server error (500 ...)'",
+    "AC-7 e2e GitHub proxy returning 500; 04strip.png, 05-ghdown-full.png: PRs kept; github stale with last good read 16:28 UTC and the 500 error; Linear change shown 61 s after the flip",
+    "AC-7 e2e board-server stopped with the app running; 06-server-down.png: board kept; 'Couldn't refresh from http://127.0.0.1:8080: io: Connection refused (os error 111)'"
+  ]
+}

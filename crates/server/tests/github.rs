@@ -247,7 +247,10 @@ async fn a_failed_part_keeps_its_earlier_value_and_marks_the_source() {
 
     // A repo that isn't there is an error, not a repo with no PRs.
     let gone = Repo { name: "bbooth/gone".into(), ..repo() };
-    let read = GitHub::new(&url, None, vec![gone]).unwrap().prs().await;
+    // Read twice: a failed read keeps nothing, so the second still has no earlier PRs.
+    let gone = GitHub::new(&url, None, vec![gone]).unwrap();
+    gone.prs().await;
+    let read = gone.prs().await;
     let error = "GitHub /repos/bbooth/gone/pulls: not found (no earlier PRs)".to_string();
     assert_eq!((read.repos_read, read.errors.as_slice()), (0, [error].as_slice()));
 
