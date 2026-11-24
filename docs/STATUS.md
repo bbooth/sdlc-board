@@ -17,7 +17,9 @@
   you" list: specs to approve, green PRs to merge, blocked tickets. Set
   `GITHUB_TOKEN` (read-only): without one, a read sends at most 45
   requests and reads are spaced to keep to 45 of GitHub's 60 an hour
-  (`GITHUB_ENDPOINT` to override). Gate records are read once per commit.
+  (`GITHUB_ENDPOINT` to override). Gate records are read once per commit,
+  one file per stage, so after a start or a push a tokenless server can
+  take a few reads to show every card's gate.
   A failed checks read keeps the last value for the same commit, or shows
   "checks unknown", and the source's age is that of the oldest data kept.
 

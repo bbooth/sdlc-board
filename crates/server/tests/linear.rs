@@ -43,9 +43,11 @@ async fn open_tickets_land_once_in_their_stage_with_sub_tickets_nested() {
     let parent = &cols.iter().find(|c| c.stage == "Outcome").unwrap().tickets[0];
     let kids: Vec<(&str, &str)> = parent.children.iter().map(|c| (c.id.as_str(), c.stage.as_str())).collect();
     assert_eq!(kids, [("TRU-6", "Rollout"), ("TRU-7", "Build")]);
-    // Gate output posted as comments gives the card its latest gate.
+    // Gate output posted as comments gives the card the gate posted last:
+    // Build again after Verify failed, not the further stage.
     let gate = parent.children[1].gate.as_ref().unwrap();
     assert_eq!((gate.stage.as_str(), gate.round, gate.pass), ("Build", 2, true));
+    assert_eq!(gate.at.as_deref(), Some("2026-11-24T02:00:00.000Z"));
     assert_eq!(parent.repo, "bbooth/booking");
 
     // Each open ticket appears exactly once; the completed one not at all.

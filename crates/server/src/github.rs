@@ -219,6 +219,9 @@ impl GitHub {
             let record = self.get(&format!("{dir}/{name}"), &[("ref", at)]).await?;
             if let Some(r) = record.as_ref().filter(|r| r["result"].is_string()) {
                 let at = r["recorded_at"].as_str().map(String::from);
+                if at.is_none() {
+                    tracing::warn!(file = %format!("{dir}/{name}"), "gate record has no recorded_at, so it sorts first");
+                }
                 read.push(Gate { stage, round, pass: r["result"] == "pass", at });
             }
         }
