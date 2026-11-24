@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-12",
+  "round": 4,
+  "result": "pass",
+  "recorded_at": "2026-11-24T21:27:06.736Z",
+  "inputs": {
+    "branch": "feat/tru-12-deploy-web-access",
+    "commit": "a8dd3b0"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-12-deploy-web-access"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "34 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "4 test files changed with 6 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "797 lines changed, counting 160 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at a8dd3b0"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "3 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": ".github/workflows/ci.yaml:64: the fix resolves the round-2 blocking finding. A write-back B1 that lands on top of A2 now diffs empty against A2 once deploy/.argocd-source-sdlc-board.yaml is excluded, so A2 still gets :latest. That file name matches Image Updater's helm write-back for the Application 'sdlc-board' with path 'deploy', and the diff works in the depth-1 clone because it only needs the two trees. One window is left: 'Decide tags' runs before the build (up to 45 min) and the push comes after it. Here is the sequence. A1's check passes while main == A1. A2 merges, and A2's run pushes :latest before A1's long build finishes (for example, A1 has a cold cache after a Cargo.lock change). A1 then overwrites :latest with older code. Image Updater rolls the cluster back to A1's image with only a ::notice-free green run. Fix: build with push: false and load, re-run the diff right before pushing, or push :<sha> first and move :latest in a final step after a fresh fetch."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": ".github/workflows/ci.yaml:81 and .dockerignore:1-6: the new comment says provenance: false stops restarts for commits that change nothing in the image. That holds only for paths .dockerignore drops (docs, deploy, argocd, .sdlc). `COPY . .` (Dockerfile:7) still takes in CLAUDE.md, README.md, .github/, .claude/, .gitignore and rustfmt.toml. A merge that touches only CLAUDE.md or ci.yaml breaks the COPY cache, so the whole server and wasm build runs again. The final-stage COPY layers get new file mtimes, :latest gets a new digest, Image Updater writes it back, and the single Recreate pod (deploy/templates/board.yaml:29) restarts. Fix: add those paths to .dockerignore, or copy only Cargo.toml, Cargo.lock and crates/."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "deploy/values.yaml:8,10: access.issuer and access.aud are still empty at a8dd3b0. deploy/templates/board.yaml:9-10 `required`s both, so CI's deploy job (`helm template`, ci.yaml:43) fails, and the image job that needs it never runs. The ticket says they will be committed before merge. This is a reminder that the branch is not mergeable until they are, and that the new 'Decide tags' logic has not run in CI yet."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
