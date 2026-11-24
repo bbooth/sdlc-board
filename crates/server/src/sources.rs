@@ -49,7 +49,7 @@ impl Source for crate::github::GitHub {
         let read = self.prs().await;
         // Nothing new was read, so the source's data is as old as its last good read.
         if let (0, [first, ..]) = (read.repos_read, read.errors.as_slice()) {
-            anyhow::bail!("no repo's PRs could be read, first: {first}");
+            anyhow::bail!("no repo's PRs could be read ({}), first: {first}", read.repos_failed.join(", "));
         }
         let repos = match read.repos_failed.as_slice() {
             [] => String::new(),

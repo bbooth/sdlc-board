@@ -234,7 +234,8 @@ async fn a_failed_part_keeps_its_earlier_value_and_marks_the_source() {
     let both = GitHub::new(&url, None, vec![repo(), Repo { name: "bbooth/gone".into(), ..repo() }]).unwrap();
     let state = sources::State::new();
     sources::refresh(&state, &both).await;
-    let error = state.snapshot().sources[0].last_error.clone().unwrap();
+    let github = state.snapshot().sources.into_iter().find(|s| s.name == "github").unwrap();
+    let error = github.last_error.unwrap();
     assert!(error.starts_with("PR lists failed for bbooth/gone; "), "{error}");
 }
 
