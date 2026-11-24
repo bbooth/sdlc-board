@@ -1,0 +1,92 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-9",
+  "round": 3,
+  "result": "pass",
+  "recorded_at": "2026-11-24T03:12:13.585Z",
+  "inputs": {
+    "branch": "feat/tru-9-linear-board",
+    "commit": "d3de19f"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-9-linear-board"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "30 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "4 test files changed with 11 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "800 lines changed; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at d3de19f"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "4 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/tests/board.rs:20: the round-1 blocking finding is resolved; the test fails without the nested children call or the stage label, and get_by_label panics on duplicates. It checks that each label exists but not where it is drawn, so it would still pass if sub-tickets were separate cards or the indent at crates/app/src/lib.rs:34 were removed. Comparing node bounds would catch this."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/linear.rs:41: df84cd8 squeezes server code the round-1 finding didn't touch (renames, a single chained request line, Option for listen) to stay within the M size of 800 lines; the request/error chain is harder to read."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "board.toml:1: the only repo configured is project Booking, so the ticket's end-to-end expectation of TRU-5 to TRU-8 can't hold (TRU-8 is in project SDLC board). The PR should say which changes."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/tests/metrics.rs:40: for a source that never had a good read, board_source_age_seconds is only checked to be >= 0, so reporting 0 instead of seconds since start would pass."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
