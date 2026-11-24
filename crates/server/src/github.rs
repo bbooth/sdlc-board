@@ -2,13 +2,15 @@ use crate::config::Repo;
 use crate::gates;
 use board_api::{Checks, Gate, Pr};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 
 pub const ENDPOINT: &str = "https://api.github.com";
 
-/// How often to read GitHub without a token: the unauthenticated limit is 60
-/// requests an hour, and one read costs a few per PR.
-pub const UNAUTHENTICATED_INTERVAL: Duration = Duration::from_secs(30 * 60);
+/// Requests an hour to spend without a token, of the 60 GitHub allows.
+const UNAUTHENTICATED_BUDGET: u64 = 45;
 /// How many recently closed PRs to look through for merged ones.
 const RECENT: &str = "20";
 
@@ -26,12 +28,23 @@ pub struct PrInfo {
     pub gate: Option<Gate>,
 }
 
+/// One read's PRs, and what failed in it (those parts keep the last read's).
+#[derive(Debug, Default)]
+pub struct PrRead {
+    pub prs: Vec<PrInfo>,
+    pub errors: Vec<String>,
+}
+
 /// Reads each repo's PRs, their checks and their gate records.
 pub struct GitHub {
     client: reqwest::Client,
     endpoint: String,
     token: Option<String>,
     repos: Vec<Repo>,
+    /// Requests sent since the interval was last worked out.
+    requests: AtomicU64,
+    /// Each repo's PRs as last read, for the parts a read fails to get.
+    last: Mutex<HashMap<String, Vec<PrInfo>>>,
 }
 
 fn list(v: &Option<Value>) -> impl Iterator<Item = &Value> {
@@ -41,20 +54,23 @@ fn list(v: &Option<Value>) -> impl Iterator<Item = &Value> {
 impl GitHub {
     pub fn new(endpoint: &str, token: Option<String>, repos: Vec<Repo>) -> anyhow::Result<Self> {
         let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).user_agent("sdlc-board").build()?;
-        Ok(Self { client, endpoint: endpoint.into(), token, repos })
+        let (requests, last) = (AtomicU64::new(0), Mutex::default());
+        Ok(Self { client, endpoint: endpoint.into(), token, repos, requests, last })
     }
 
+    /// Without a token, long enough that reads like the ones since the last call fit the budget.
     pub fn interval(&self) -> Duration {
+        let spent = self.requests.swap(0, Ordering::Relaxed);
         if self.token.is_some() {
-            crate::sources::INTERVAL
-        } else {
-            UNAUTHENTICATED_INTERVAL
+            return crate::sources::INTERVAL;
         }
+        crate::sources::INTERVAL.max(Duration::from_secs(spent * 3600 / UNAUTHENTICATED_BUDGET))
     }
 
     /// GETs an API path; `None` when it doesn't exist. The raw media type
     /// returns a file's own contents and the usual JSON for everything else.
     async fn get(&self, path: &str, query: &[(&str, &str)]) -> anyhow::Result<Option<Value>> {
+        self.requests.fetch_add(1, Ordering::Relaxed);
         let e = |err: reqwest::Error| anyhow::anyhow!("GitHub {path}: {err}");
         let mut req = self.client.get(format!("{}{path}", self.endpoint)).query(query);
         req = req.header("Accept", "application/vnd.github.raw+json");
@@ -68,28 +84,43 @@ impl GitHub {
         Ok(Some(resp.error_for_status().map_err(e)?.json().await.map_err(e)?))
     }
 
-    pub async fn prs(&self) -> anyhow::Result<Vec<PrInfo>> {
-        let mut out = Vec::new();
+    pub async fn prs(&self) -> PrRead {
+        let mut read = PrRead::default();
         for repo in &self.repos {
-            let base = format!("/repos/{}", repo.name);
-            let pulls = format!("{base}/pulls");
-            let open = self.get(&pulls, &[("state", "open"), ("per_page", "100")]).await?;
-            let recent = [("state", "closed"), ("sort", "updated"), ("direction", "desc"), ("per_page", RECENT)];
-            let closed = self.get(&pulls, &recent).await?;
-            let merged = list(&closed).filter(|p| !p["merged_at"].is_null());
-            for p in list(&open).chain(merged) {
-                // Anyone can open a PR from a fork, so only the repo's own branches count.
-                if p["head"]["repo"]["full_name"] == repo.name.as_str() {
-                    out.extend(self.pr_info(&base, repo, p).await);
-                }
+            let last = self.last.lock().unwrap_or_else(|e| e.into_inner()).get(&repo.name).cloned();
+            let prs = self.repo_prs(repo, last.as_deref().unwrap_or_default(), &mut read.errors).await;
+            let prs = prs.unwrap_or_else(|e| {
+                read.errors.push(e.to_string());
+                last.unwrap_or_default()
+            });
+            self.last.lock().unwrap_or_else(|e| e.into_inner()).insert(repo.name.clone(), prs.clone());
+            read.prs.extend(prs);
+        }
+        read
+    }
+
+    async fn repo_prs(&self, repo: &Repo, last: &[PrInfo], errors: &mut Vec<String>) -> anyhow::Result<Vec<PrInfo>> {
+        let pulls = format!("/repos/{}/pulls", repo.name);
+        let open = self.get(&pulls, &[("state", "open"), ("per_page", "100")]).await?;
+        let recent = [("state", "closed"), ("sort", "updated"), ("direction", "desc"), ("per_page", RECENT)];
+        let closed = self.get(&pulls, &recent).await?;
+        let merged = list(&closed).filter(|p| !p["merged_at"].is_null());
+        let mut out = Vec::new();
+        for p in list(&open).chain(merged) {
+            // Anyone can open a PR from a fork, so only the repo's own branches
+            // count. GitHub names are case-insensitive.
+            let from = p["head"]["repo"]["full_name"].as_str().unwrap_or_default();
+            if from.eq_ignore_ascii_case(&repo.name) {
+                out.extend(self.pr_info(repo, p, last, errors).await);
             }
         }
         Ok(out)
     }
 
-    /// One PR's checks and gate; a part that fails to read is logged and
-    /// left unknown, so one bad PR doesn't fail the whole read.
-    async fn pr_info(&self, base: &str, repo: &Repo, p: &Value) -> Option<PrInfo> {
+    /// One PR's checks and gate. A part that fails to read keeps what the
+    /// last read found, so one bad PR neither fails the read nor blanks its card.
+    async fn pr_info(&self, repo: &Repo, p: &Value, last: &[PrInfo], errors: &mut Vec<String>) -> Option<PrInfo> {
+        let base = format!("/repos/{}", repo.name);
         let title = p["title"].as_str().unwrap_or_default();
         let branch = p["head"]["ref"].as_str().unwrap_or_default();
         // A body only mentions tickets in passing, so it ties nothing.
@@ -97,7 +128,11 @@ impl GitHub {
         let ticket = on_branch.clone().or_else(|| ticket_id(title, &repo.linear_team))?;
         let (number, merged) = (p["number"].as_u64().unwrap_or(0), !p["merged_at"].is_null());
         let at = if merged { &p["merge_commit_sha"] } else { &p["head"]["sha"] }.as_str().unwrap_or_default();
-        let warn = |what: &str, e: anyhow::Error| tracing::warn!(repo = %repo.name, pr = number, error = %e, "reading {what} failed");
+        let before = last.iter().find(|l| l.pr.number == number);
+        let mut failed = |what: &str, e: anyhow::Error| {
+            tracing::warn!(repo = %repo.name, pr = number, error = %e, "reading {what} failed");
+            errors.push(format!("PR #{number} {what}: {e}"));
+        };
         // A merged PR's checks no longer matter; the card says it merged.
         let checks = if merged {
             Checks::Pass
@@ -105,14 +140,14 @@ impl GitHub {
             match self.get(&format!("{base}/commits/{at}/check-runs"), &[("per_page", "100")]).await {
                 Ok(runs) => checks(runs.as_ref().unwrap_or(&Value::Null)),
                 Err(e) => {
-                    warn("checks", e);
-                    Checks::Pending
+                    failed("checks", e);
+                    before.map_or(Checks::Pending, |b| b.pr.checks)
                 }
             }
         };
-        let gate = self.record(base, &ticket, at).await.unwrap_or_else(|e| {
-            warn("gate records", e);
-            None
+        let gate = self.record(&base, &ticket, at).await.unwrap_or_else(|e| {
+            failed("gate records", e);
+            before.and_then(|b| b.gate.clone())
         });
         let url = p["html_url"].as_str().unwrap_or_default().into();
         let pr = Pr { number, title: title.into(), url, checks, merged };

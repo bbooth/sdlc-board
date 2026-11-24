@@ -61,8 +61,7 @@ fn nest(issue: &Issue, children: &HashMap<&str, Vec<&Issue>>, prs: &[PrInfo]) ->
     }
 }
 
-/// The ticket's PR: one on a branch that names it first, then an open one
-/// before a merged one, then the newest.
+/// The ticket's PR: one whose branch names it, then an open one, then the newest.
 fn pr_for<'a>(prs: &'a [PrInfo], id: &str) -> Option<&'a PrInfo> {
     prs.iter().filter(|p| p.ticket == id).max_by_key(|p| (p.by_branch, !p.pr.merged, p.pr.number))
 }

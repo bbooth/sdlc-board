@@ -23,6 +23,8 @@ pub trait Source: Send + Sync + 'static {
 pub struct Read {
     pub issues: Vec<Issue>,
     pub prs: Vec<PrInfo>,
+    /// What failed in a read that still returned data, shown as the source's error.
+    pub partial: Option<String>,
 }
 
 impl Source for crate::linear::Linear {
@@ -42,7 +44,10 @@ impl Source for crate::github::GitHub {
         self.interval()
     }
     async fn read(&self) -> anyhow::Result<Read> {
-        Ok(Read { prs: self.prs().await?, ..Read::default() })
+        let read = self.prs().await;
+        let partial =
+            read.errors.first().map(|e| format!("{} parts kept from earlier reads, first: {e}", read.errors.len()));
+        Ok(Read { prs: read.prs, partial, ..Read::default() })
     }
 }
 
@@ -110,16 +115,16 @@ pub async fn refresh<S: Source>(state: &State, source: &S) {
         }
     };
     let secs = started.elapsed().as_secs_f64();
-    state.metrics.observe(name, secs, result.is_ok());
+    state.metrics.observe(name, secs, matches!(&result, Ok(r) if r.partial.is_none()));
     let mut data = state.data.write().unwrap_or_else(|e| e.into_inner());
     let part = data.entry(name).or_default();
     match result {
         Ok(read) => {
             let (issues, prs) = (read.issues.len(), read.prs.len());
-            tracing::info!(source = name, issues, prs, duration_s = secs, "source read");
-            part.read = read;
+            tracing::info!(source = name, issues, prs, partial = read.partial, duration_s = secs, "source read");
             part.last_good = Some(now());
-            part.last_error = None;
+            part.last_error = read.partial.clone();
+            part.read = read;
         }
         Err(e) => {
             tracing::warn!(source = name, error = %e, duration_s = secs, "source read failed");
@@ -128,12 +133,10 @@ pub async fn refresh<S: Source>(state: &State, source: &S) {
     }
 }
 
-/// Reads the source now and then every interval, forever.
+/// Reads the source now and then after each interval, which can depend on the read's cost.
 pub async fn run<S: Source>(state: Arc<State>, source: S) {
-    let mut tick = tokio::time::interval(source.interval());
-    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
-        tick.tick().await;
         refresh(&state, &source).await;
+        tokio::time::sleep(source.interval()).await;
     }
 }

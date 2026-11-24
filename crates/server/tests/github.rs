@@ -1,12 +1,22 @@
 use axum::extract::{Path, Query};
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use board_api::{Checks, Gate};
-use board_server::{board, config::Repo, github::GitHub};
+use board_server::{board, config::Repo, github::GitHub, sources};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
+use std::sync::Arc;
+use std::time::Duration;
+
+/// The fake answers as recorded, fails every check and record call, or fails the PR lists.
+const OK: u8 = 0;
+const PARTS_FAIL: u8 = 1;
+const LISTS_FAIL: u8 = 2;
 
 // Recorded shapes of GitHub's REST responses, trimmed to the fields the board reads.
-async fn fake_github() -> String {
+async fn fake_github() -> (String, Arc<AtomicU8>) {
+    let mode = Arc::new(AtomicU8::new(OK));
+    let (m1, m2, m3) = (mode.clone(), mode.clone(), mode.clone());
     let pr = |n: u64, title: &str, branch: &str, body: &str| {
         json!({"number": n, "title": title, "html_url": format!("https://github.com/bbooth/booking/pull/{n}"),
                "draft": false, "head": {"sha": format!("sha{n}"), "ref": branch, "repo": {"full_name": "bbooth/booking"}},
@@ -34,9 +44,15 @@ async fn fake_github() -> String {
     merged["merged_at"] = json!("2026-11-24T00:00:00Z");
     let closed = json!([pr(10, "TRU-12: Abandoned", "feat/tru-12-old", ""), merged]);
     let pulls = move |Query(q): Query<HashMap<String, String>>| async move {
-        Json(if q.get("state").map(String::as_str) == Some("closed") { closed } else { open })
+        if m1.load(Relaxed) == LISTS_FAIL {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+        Json(if q.get("state").map(String::as_str) == Some("closed") { closed } else { open }).into_response()
     };
-    let runs = |sha: String| {
+    let runs = move |sha: String| {
+        if m2.load(Relaxed) == PARTS_FAIL {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
         let run = |status: &str, conclusion: Value| json!({"status": status, "conclusion": conclusion});
         let runs = match sha.as_str() {
             "sha8" => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -46,7 +62,10 @@ async fn fake_github() -> String {
         };
         Json(json!({ "total_count": runs.len(), "check_runs": runs })).into_response()
     };
-    let contents = |Path(path): Path<String>, Query(q): Query<HashMap<String, String>>| async move {
+    let contents = move |Path(path): Path<String>, Query(q): Query<HashMap<String, String>>| async move {
+        if m3.load(Relaxed) == PARTS_FAIL {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
         let names = ["build-1.json", "verify-1.json", "verify-2.json", "adversarial_review-1.json", "notes.txt"];
         match (path.as_str(), q.get("ref").map(String::as_str)) {
             (".sdlc/records/TRU-6", Some("sha1")) => Json(json!(names.map(|n| json!({ "name": n })))).into_response(),
@@ -68,7 +87,7 @@ async fn fake_github() -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{addr}")
+    (format!("http://{addr}"), mode)
 }
 
 fn repo() -> Repo {
@@ -81,7 +100,7 @@ fn gate(stage: &str, round: u32, pass: bool) -> Gate {
 
 #[tokio::test]
 async fn checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read() {
-    let prs = GitHub::new(&fake_github().await, None, vec![repo()]).unwrap().prs().await.unwrap();
+    let prs = GitHub::new(&fake_github().await.0, None, vec![repo()]).unwrap().prs().await.prs;
 
     let got: Vec<(&str, u64, Checks, bool)> =
         prs.iter().map(|p| (p.ticket.as_str(), p.pr.number, p.pr.checks, p.pr.merged)).collect();
@@ -110,7 +129,7 @@ async fn checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read() {
 
 #[tokio::test]
 async fn a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr() {
-    let prs = GitHub::new(&fake_github().await, None, vec![repo()]).unwrap().prs().await.unwrap();
+    let prs = GitHub::new(&fake_github().await.0, None, vec![repo()]).unwrap().prs().await.prs;
     let issue = |id: &str, comment: &str| board::Issue {
         id: id.into(),
         title: id.into(),
@@ -146,4 +165,46 @@ async fn a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr
     // TRU-6 is in PR review with two green PRs; only its own is a merge to do.
     let merges: Vec<String> = board::needs_you(&issues, &prs).into_iter().map(|n| n.url).collect();
     assert_eq!(merges, ["https://github.com/bbooth/booking/pull/1"]);
+}
+
+// A PR's failed reads keep the last read's values, and the source reports them.
+#[tokio::test]
+async fn a_failed_part_keeps_its_earlier_value_and_marks_the_source() {
+    let (url, mode) = fake_github().await;
+    let github = GitHub::new(&url, None, vec![repo()]).unwrap();
+    let first = github.prs().await;
+    assert!(first.errors.iter().all(|e| e.starts_with("PR #8 ")), "{:?}", first.errors);
+
+    mode.store(PARTS_FAIL, Relaxed);
+    let second = github.prs().await;
+    let pr1 = second.prs.iter().find(|p| p.pr.number == 1).unwrap();
+    assert_eq!((pr1.pr.checks, pr1.gate.clone()), (Checks::Pass, Some(gate("Adversarial review", 1, false))));
+    // #8 had nothing to keep.
+    let pr8 = second.prs.iter().find(|p| p.pr.number == 8).unwrap();
+    assert_eq!((pr8.pr.checks, pr8.gate.clone()), (Checks::Pending, None));
+    assert!(second.errors.iter().any(|e| e.starts_with("PR #1 checks: ")), "{:?}", second.errors);
+
+    mode.store(LISTS_FAIL, Relaxed);
+    let third = github.prs().await;
+    assert_eq!(third.prs, second.prs);
+    assert_eq!(third.errors.len(), 1);
+
+    let state = sources::State::new();
+    sources::refresh(&state, &github).await;
+    let status = state.snapshot().sources.into_iter().find(|s| s.name == "github").unwrap();
+    assert!(status.last_error.unwrap().contains("parts kept from earlier reads"));
+}
+
+// Without a token the next read waits long enough for reads like the last
+// ones to stay within GitHub's 60 requests an hour.
+#[tokio::test]
+async fn without_a_token_reads_are_spaced_by_what_they_cost() {
+    let url = fake_github().await.0;
+    let github = GitHub::new(&url, None, vec![repo()]).unwrap();
+    github.prs().await;
+    let wait = github.interval();
+    // 15 requests: two lists, checks for 5 tied open PRs, a records folder
+    // for each of the 6 tied PRs, and the 2 latest record files.
+    assert_eq!(wait, Duration::from_secs(15 * 3600 / 45));
+    assert_eq!(github.interval(), sources::INTERVAL, "the count starts again after each interval");
 }
