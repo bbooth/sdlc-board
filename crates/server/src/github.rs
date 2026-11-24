@@ -129,6 +129,7 @@ impl GitHub {
             let prs = match prs {
                 Ok(prs) => {
                     read.repos_read += 1;
+                    self.last.lock().unwrap_or_else(|e| e.into_inner()).insert(repo.name.clone(), prs.clone());
                     prs
                 }
                 Err(e) => {
@@ -136,10 +137,10 @@ impl GitHub {
                     read.repos_failed.push(repo.name.clone());
                     let kept = if last.is_some() { "kept its PRs from an earlier read" } else { "no earlier PRs" };
                     read.errors.push(format!("{e} ({kept})"));
+                    // Only a good read is kept, so "kept its PRs" means there were some.
                     last.unwrap_or_default()
                 }
             };
-            self.last.lock().unwrap_or_else(|e| e.into_inner()).insert(repo.name.clone(), prs.clone());
             read.prs.extend(prs);
         }
         read

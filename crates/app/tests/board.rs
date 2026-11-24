@@ -16,6 +16,8 @@ fn sub_tickets_are_drawn_under_their_ticket_with_their_stages() {
     for text in ["Spec (0)", "Build (1)", "TRU-8", "One board", "TRU-9", "· Verify", "TRU-10", "· Plan"] {
         harness.get_by_label(text);
     }
+    // Sub-tickets in their parent's repo don't repeat it: only the card names "r".
+    assert_eq!(harness.query_all_by_label("r").count(), 1);
 }
 
 const NEEDS_YOU: &str = r#"{"generated_at": 1000, "sources": [{"name": "linear", "last_good": 1000, "last_error": null},
