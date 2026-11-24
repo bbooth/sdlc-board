@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-10",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-24T04:38:33.445Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "3f113e3"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-10-prs-gates-needs-you"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "20 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "6 test files changed with 9 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "547 lines changed; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 3f113e3"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "4 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/board.rs:76-77: needs_you lists every non-draft PR with green checks as 'merge', whatever stage its ticket is in. AC-2 asks for a PR 'waiting for the owner's merge', and the owner merges only after the PR review gate. What you would see: a ticket in Build or Verify whose CI is green (this branch's own PR, for example) shows as 'Merge: TRU-10 ...' in Needs you before its review has run. The PR also gets listed when its ticket is closed or isn't on the board. No test covers a green PR whose ticket is not yet in PR review.",
+      "reason": "Fixed: only PRs whose open ticket is in PR review are listed; needs_you.rs covers a green PR still in Build."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:57 with crates/server/src/board.rs:51: since 3d4eb1e a PR is tied to the first ID anywhere in its title, or else its body. Combined with `prs.iter().find`, a non-pipeline PR that only mentions a ticket now takes over that ticket. Examples: title 'Follow-up to TRU-6: ...', or a 'Bump deps' PR whose body says 'unblocks TRU-8'. Either can be the PR shown on that ticket's card, depending on the order GitHub lists them, and either gets a 'merge' item once green. If one ticket has two PRs, one is shown and the other is dropped without being logged. crates/server/tests/github.rs only tests that one PR per ticket gets tied correctly, not that a second one doesn't collide."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:405-418 (checks): only check-runs are read, not commit statuses. A PR with no check runs is 'pending' forever. Verify saw this on sdlc-board 3b60d49 (0 runs, 'checks pending'), so a repo without Actions CI never gets a 'merge' item. Still open from Build round 1 and Verify round 1."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:53-71 (prs): each per-PR check-runs or contents call ends in `?`. One 403 or 5xx on any single PR fails the whole GitHub read, and every repo keeps its stale PR list. The pulls and check-runs calls also read only the first page (per_page=100) and don't log when there are more. Still open from Build round 1."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
