@@ -1,0 +1,159 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-10",
+  "round": 3,
+  "result": "fail",
+  "recorded_at": "2026-11-24T06:15:30.229Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "a06bd8a",
+    "verify_record": ".sdlc/records/TRU-10/verify-5.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/verify-5.json says pass at 96f36bd"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 96f36bd"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at a06bd8a"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read a06bd8a"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, api, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "15 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "3 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "3 stand: [operability] crates/server/src/github.rs:154: when the check-runs read fails, the PR keeps the previous read's checks value. It looks the earlier value up by PR number only (line 141), not by head SHA. Here is the sequence. PR #N is green at sha A. A new commit B is pushed. The `/commits/B/check-runs` GET then times out, returns 5xx or is rate-limited. The PR still carries `checks: Pass` for head B, and board.rs:83 lists it in Needs you as a \"merge\" item, although nothing about B's checks is known. The only sign is the github source's generic `partial` error line. The Needs you item itself looks the same as a truly green PR, so the owner is told to merge an unchecked head. The fallback should only apply when `before`'s head is the same as `at`, and should be Pending otherwise. The gate fallback at line 160 has the same flaw, though it is less harmful.; [operability] crates/server/src/github.rs:69: without a token, the 45-request budget only spaces reads apart. Nothing limits how many requests one read sends. Each read sends 2 list GETs, then 2 GETs (records dir and file) for each of up to 20 recently merged PRs (RECENT, line 15), plus 3 for each open PR. That is about 42 "
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:81: gate results are taken from every comment on a ticket, whoever wrote it. The query on line 14 fetches only `body`, never the author. crates/server/src/gates.rs:44 accepts any line of the form `### Gate: <known stage> (pass) · round N`, and gates::latest picks the furthest stage. So anyone who can comment on the ticket (a workspace member, or an integration that copies outside text into Linear comments) can post `### Gate: Outcome (pass) · round 1`. That card's gate then shows Outcome pass for good, overriding the real records on the branch. Still open from adversarial_review-2. Fetching `user`/`botActor` and accepting only the pipeline's poster would close it.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/main.rs:24: the diff gives the server a GITHUB_TOKEN, which may reach private repos, and puts what it reads (PR titles, branches' gate results, raw GitHub error strings in sources[].last_error) into GET /v1/snapshot. crates/server/src/routes.rs still serves that route with no check at all. docs/adr/0001 says the server must check Cloudflare Access's signed header itself, so that a request that skips Access gets nothing. The gap was already there before this diff, but the diff widens what an unauthenticated caller who reaches the pod or the Service can read. Nothing deploys yet, so this matters once the server is exposed.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/api/src/lib.rs:57: `Checks` is a closed enum with no `#[serde(other)]` fallback, and the app parses the whole snapshot in one `serde_json::from_slice::<Snapshot>` call (crates/app/src/main.rs:38). If a later server adds a check state such as `skipped` or `neutral` to /v1, every app built from this commit (native, wasm, Android) fails to parse the snapshot and shows 'Couldn't load the board' in place of the board. `NeedsYou.kind` was made a String for exactly this reason (crates/app/src/lib.rs:94 handles 'a kind from a newer server'), so `Checks` is inconsistent with it. Once this ships, adding a variant means a /v2 route. A `#[serde(other)] Unknown` variant would avoid that.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:130: on a partial GitHub read, `SourceStatus.last_error` is now set while `last_good` is now. Before, a non-null `last_error` meant the last read failed and the data dated from `last_good`. That changes the meaning of a /v1 field without documenting it in crates/api/src/lib.rs:30. The new app shows 'github: the last read failed, data is 0 min old: N parts kept from earlier reads...' (crates/app/src/lib.rs:83), which states a failure and a fresh age at once, though some PRs' checks or gates may be older. Meanwhile `board_source_age_seconds` drops to 0 and `board_source_read_errors_total` now counts partial reads (metrics.rs:25). Nothing in the repo consumes these yet (there is no deploy/ or alerts), so this is minor.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/github.rs:154: when the check-runs read fails, the PR keeps the previous read's checks value. It looks the earlier value up by PR number only (line 141), not by head SHA. Here is the sequence. PR #N is green at sha A. A new commit B is pushed. The `/commits/B/check-runs` GET then times out, returns 5xx or is rate-limited. The PR still carries `checks: Pass` for head B, and board.rs:83 lists it in Needs you as a \"merge\" item, although nothing about B's checks is known. The only sign is the github source's generic `partial` error line. The Needs you item itself looks the same as a truly green PR, so the owner is told to merge an unchecked head. The fallback should only apply when `before`'s head is the same as `at`, and should be Pending otherwise. The gate fallback at line 160 has the same flaw, though it is less harmful.",
+      "status": "open",
+      "scope": "operability",
+      "reason": "github.rs:141 finds `before` by `pr.number` only, and PrInfo/Pr store no head SHA to compare. github.rs:154 then reuses `b.pr.checks` for the new head `at`. board.rs:82 only needs `checks == Pass && !draft && !merged` to add a merge item, and nothing earlier stops it. A failed checks read on a new head of a PR that was green therefore yields a Merge item for unchecked code. The same holds for the gate at github.rs:160, which reuses the old head's gate.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/github.rs:69: without a token, the 45-request budget only spaces reads apart. Nothing limits how many requests one read sends. Each read sends 2 list GETs, then 2 GETs (records dir and file) for each of up to 20 recently merged PRs (RECENT, line 15), plus 3 for each open PR. That is about 42 + 3 per open PR for every repo. So bbooth/booking with about 7 open PRs, or any second repo in board.toml, goes past GitHub's 60 an hour inside the first read. The PRs read last (the merged ones, since open PRs are read first) get 403s. They show no gate (or Pending checks) and are reported only as `partial`. Because the interval is then worked out from more than 60 spent requests, the same tail fails again every hour. This breaks what docs/STATUS.md:17-18 promises (\"reads are spaced to spend at most 45 of GitHub's 60 requests an hour\"). Merged PRs' records at their merge commit never change, yet they are fetched again on every read.",
+      "status": "open",
+      "scope": "operability",
+      "reason": "Real but smaller than claimed today. github.rs:138 returns None before any request for a PR whose branch and title name no TRU ticket, and a records dir that returns 404 costs 1 GET, not 2. Live bbooth/booking has 1 open PR (dependabot, no ticket), and only #53 and #49 of the last 20 closed PRs name a TRU ticket, so a read costs about 6 requests now. The mechanism still holds: github.rs:64-70 only spaces reads apart and nothing caps one read. Once the recent merged PRs are mostly pipeline PRs, a read costs up to about 42 plus 3 per open PR per repo, and a second such repo goes past 60 in a single read. That breaks the 45-an-hour promise in docs/STATUS.md, and merged PRs' records are fetched again on every read.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:50: a read only counts as failed when no repo's list could be read. With more than one repo, a repo whose list call fails on every read (renamed, token lost access) is folded into `partial`. refresh still sets `last_good = now()` (sources.rs:129), so `board_source_age_seconds{source=\"github\"}` stays near 0 and that repo's PRs are served from an ever older cache with no age signal. Only the errors counter and last_error show it. A per-repo age, or treating a failed list as stale for that repo, would make this visible.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:58: the 20 s timeout applies to each request, and a read is about 45 or more requests sent one after another, with no deadline for the whole read. sources.rs refresh then retries the whole read once. While GitHub is slow, one refresh can take tens of minutes. The duration histogram's top bucket is 40 s (metrics.rs:22), so how long these reads take is not visible.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:86: `error_for_status` drops GitHub's response body and the X-RateLimit-Remaining/Reset headers. A rate-limited 403 then looks the same in the logs and `last_error` as a permissions 403 (\"HTTP status client error (403 Forbidden)\"). Nothing logs or exports how much of the rate limit is left, and that is the main way this source degrades.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/github.rs:154: When the check-runs read fails for a PR the server hasn't seen before (a new PR, or the first read after a restart, e.g. a 502 or a 403 rate limit), the checks fall back to Checks::Pending. The card then shows \"PR #N checks pending\" for a PR that may be green, and the PR is left out of \"Needs you\". The banner from crates/app/src/lib.rs:11-14 together with crates/server/src/sources.rs:53,129 reads \"github: the last read failed, data is 0 min old: 1 parts kept from earlier reads, first: PR #N checks: ...\". That is wrong twice: nothing was kept from an earlier read, and the age is 0 min because last_good is set to now on a partial read. The same thing happens when a known PR's checks or gate read keeps failing: its card shows values from hours ago while the banner says 0 min. This undoes the purpose of f0c50f4 ('so stale data looks stale').",
+      "status": "open",
+      "scope": "web",
+      "reason": "The code matches the finding. github.rs:154 falls back to Pending when there is no `before`. sources.rs:52-53 always writes \"N parts kept from earlier reads\", even when nothing was kept. sources.rs:129 sets last_good to now() on any Ok read, partial ones included. app lib.rs:11-14 then shows \"the last read failed, data is 0 min old\". No PR or card carries its own age, so a part that keeps failing keeps showing old values. The existing test, crates/server/tests/github.rs:184-201, covers the Pending fallback and the \"parts kept\" wording, and it does not catch the misleading age. Overstated: f0c50f4 only targeted reads where no repo's list could be read, and that case still works; this is a different gap.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:14: A partial GitHub read (most PRs read fine, one PR's checks did not) is shown as \"github: the last read failed\". This reads as if the whole source is down, when only the named parts are stale. The partial case could use its own wording, e.g. \"some parts failed\".",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:82: A draft PR whose checks pass shows on its card as \"PR #N checks pass\", the same as a ready one. crates/server/src/board.rs (needs_you) leaves drafts out of \"Needs you\". So the owner sees a green PR in PR review that isn't listed as waiting to merge, and nothing on the card says why.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:188: A repo whose CI reports only through commit statuses has no check runs on any PR. Every one of its PRs then shows \"checks pending\" forever and none ever reaches \"Needs you\" as merge, because only /check-runs is read and an empty list counts as pending.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/board.rs:66: pr_for ranks by_branch above open. A ticket with an earlier merged PR from a branch that names it, plus an open green follow-up PR tied only by its title, shows \"PR #old merged\" on its card and gets no \"Merge\" item in Needs you.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:13: Without GITHUB_TOKEN, one read costs 2 requests plus 1-3 per open PR and 1-2 per each of up to 20 merged PRs, which can pass 60 an hour on the first read. GitHub then returns 403 for the rest, so those cards get no gate and \"checks pending\" (see the first finding). The next read is spaced spent*80s apart, up to about 2 hours, and no card shows that its PR data is that old because the banner only appears on error.",
+      "status": "open",
+      "scope": "web"
+    }
+  ],
+  "decision": "Back to Build: fix what stands, then Build, Verify and review again",
+  "evidence": []
+}
