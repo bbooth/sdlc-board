@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-9",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-24T03:02:33.554Z",
+  "inputs": {
+    "branch": "feat/tru-9-linear-board",
+    "commit": "f71577a",
+    "build_record": ".sdlc/records/TRU-9/build-1.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-9/build-1.json says pass at ee97615"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since ee97615"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at f71577a"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged f71577a"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-1, AC-10"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "9 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e and browser evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "2 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/server/tests/linear.rs:open_tickets_land_once_in_their_stage_with_sub_tickets_nested passed: cargo test -p board-server --test linear open_tickets_land_once_in_their_stage_with_sub_tickets_nested -- --exact"
+    },
+    {
+      "name": "rerun:AC-10",
+      "pass": true,
+      "detail": "crates/server/tests/metrics.rs:reads_errors_duration_and_age_are_exported_per_source passed: cargo test -p board-server --test metrics reads_errors_duration_and_age_are_exported_per_source -- --exact"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "4 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/src/main.rs: the app ignores snapshot.sources. When Linear fails (wrong key, unreachable), the board looks like a normal empty or stale board, with no sign of last_error or the age of the last good read. Observed with the 401 and unreachable-endpoint servers: the snapshot carries last_error, but the app has nothing that would draw it."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/board.rs:44: a Stage-group label that isn't one of STAGES (e.g. 'Bogus') silently puts the ticket in Intake, the same as having no label. Observed: TRU-22 in Intake. Nothing is logged, so a renamed or misspelled stage label hides where a ticket really is."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/linear.rs:89: when a ticket has more than one Stage label, the first label Linear returns wins, with no warning. Observed: TRU-25 with Spec and Build was shown in Spec."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/sources.rs:80: a 401 from a wrong key is retried, which is pointless; the server log showed 'retrying' then the same 401. Also, board_source_* series are only exported after the first read finishes, so a first read that hangs for the full 20s timeout (40s with the retry) exports no age at all until then."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-1 test crates/server/tests/linear.rs:open_tickets_land_once_in_their_stage_with_sub_tickets_nested: PASS. It FAILS in a scratch worktree when nesting is disabled (children never attached) and when closed tickets are not filtered out.",
+    "AC-1 e2e GET /v1/snapshot on board-server run with board.toml against the real TruLinc Linear workspace: 200. There are 11 columns, Intake through Outcome plus Blocked. Outcome has only TRU-5 'Drop the tenant's unused name and coach mode' (repo bbooth/booking) with children []. Every other column is empty. sources[linear] has last_good set and last_error null. This matches Linear's own GraphQL answer: TRU-5 is started/Outcome, and TRU-6 and TRU-7 are completed.",
+    "AC-1 e2e GET /v1/snapshot on board-server with LINEAR_ENDPOINT pointed at a local server returning a crafted 9-issue page: Outcome: TRU-5, with TRU-6 (Rollout, which holds TRU-23 Verify) and TRU-7 (Build). Plan: TRU-20 (its parent TRU-3 is closed/absent). Intake: TRU-21 (no Stage label) and TRU-22 (Stage label 'Bogus'). Spec: TRU-25 (labels Spec and Build). Blocked: TRU-24. Each ticket appears exactly once.",
+    "AC-1 browser native board-app (eframe) under Xvfb with BOARD_URL=http://127.0.0.1:8080 (real Linear), screenshot native-app-real.png: The app shows 11 columns with counts. Outcome (1) has a TRU-5 card with its title and bbooth/booking. All other columns show (0).",
+    "AC-1 browser native board-app under Xvfb with BOARD_URL=http://127.0.0.1:8081 (crafted data), screenshot native-app-fake.png: The TRU-5 card lists TRU-6 · Rollout, then TRU-23 · Verify indented under it, then TRU-7 · Build. TRU-20 is in Plan. TRU-21 and TRU-22 are in Intake. TRU-25 is in Spec. TRU-24 is in Blocked.",
+    "AC-10 test crates/server/tests/metrics.rs:reads_errors_duration_and_age_are_exported_per_source: PASS. It FAILS in a scratch worktree with errors.inc() removed and with the age gauge's set() removed.",
+    "AC-10 e2e GET /metrics on board-server against real Linear: board_source_reads_total{source=\"linear\"} 1, board_source_read_errors_total{source=\"linear\"} 0, board_source_read_duration_seconds histogram with count 1 and sum 0.85, board_source_age_seconds{source=\"linear\"} 3. After the next 60s tick, reads_total is 2.",
+    "AC-10 e2e GET /metrics and /v1/snapshot with a wrong LINEAR_API_KEY (real endpoint) and with LINEAR_ENDPOINT=http://127.0.0.1:9/graphql: Both show reads_total 1, read_errors_total 1, duration count 1, and age_seconds of about 8 (time since start). The snapshot has last_good null and last_error 'Linear issues for Booking: HTTP status client error (401 Unauthorized) ...' or 'error sending request ...'. No tickets are shown.",
+    "AC-10 e2e GET /metrics and /v1/snapshot after the fake endpoint was killed following one good read: reads_total 2, read_errors_total 1, age_seconds 64 and rising. The snapshot keeps the earlier tickets and shows last_good plus last_error."
+  ]
+}
