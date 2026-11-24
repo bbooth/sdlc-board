@@ -606,6 +606,8 @@ dependencies = [
  "egui_kittest",
  "serde_json",
  "ureq",
+ "wasm-bindgen-futures",
+ "web-sys",
  "web-time",
 ]
 
