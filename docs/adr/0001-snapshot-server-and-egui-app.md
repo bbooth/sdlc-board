@@ -15,9 +15,10 @@ web, to one person, and no client may hold a Linear or GitHub token.
   - Amended by TRU-11: native builds fetch with `ureq` and a 20 s deadline
     on the whole call, because `ehttp`'s native GET has none before the
     response headers and a server that never answered froze the board. The
-    wasm build still fetches with `ehttp` (the browser's fetch). The app's
-    refresh logic (`board_app::Reads`) takes the time as an argument, so the
-    wasm entry passes a browser-safe clock rather than `std::time::Instant::now`.
+    wasm build still fetches with `ehttp` (the browser's fetch), so `ureq` is
+    a native-only dependency. The app's refresh logic (`board_app::Reads`)
+    keeps time with `web_time::Instant`, which is std's natively and the
+    browser's clock on wasm, where `std::time::Instant::now` panics.
 - Access is Cloudflare Access (a browser login, or a service token from the
   native and Android builds), and the server checks Access's signed header
   itself, so a request that skips Access gets nothing.

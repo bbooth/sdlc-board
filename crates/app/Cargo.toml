@@ -7,6 +7,11 @@ edition.workspace = true
 board-api = { version = "0.1.0", path = "../api" }
 eframe = "0.37.0"
 serde_json = "1.0.154"
+# std's Instant natively, the browser's clock on wasm, where std's panics.
+web-time = "1.1.0"
+
+# The native fetch (ADR 0001); the wasm build fetches with ehttp.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ureq = "3.5.2"
 
 [dev-dependencies]

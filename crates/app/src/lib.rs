@@ -2,7 +2,8 @@
 
 use board_api::{Checks, Snapshot, Ticket};
 use eframe::egui;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 /// How often the app reads the snapshot again. The server reads Linear every
 /// minute, so a change shows within two.
