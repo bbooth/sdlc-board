@@ -24,8 +24,8 @@ pub struct Linear {
     endpoint: String,
     key: String,
     repos: Vec<Repo>,
-    /// Each repo's tickets as last read, kept when a later read of that repo fails.
-    last: Mutex<HashMap<String, Vec<Issue>>>,
+    /// Each repo's tickets and when they were read, kept when a later read of that repo fails.
+    last: Mutex<HashMap<String, (i64, Vec<Issue>)>>,
 }
 
 /// One read's tickets, and the repos whose read failed.
@@ -34,6 +34,8 @@ pub struct IssueRead {
     pub issues: Vec<Issue>,
     pub errors: Vec<String>,
     pub repos_read: usize,
+    /// When the oldest kept tickets were read, if any repo's read failed.
+    pub as_of: Option<i64>,
 }
 
 impl Linear {
@@ -57,24 +59,28 @@ impl Linear {
         let mut read = IssueRead::default();
         for repo in &self.repos {
             let last = self.last.lock().unwrap_or_else(|e| e.into_inner()).get(&repo.name).cloned();
-            let issues = match self.repo_issues(repo).await {
+            let (read_at, issues) = match self.repo_issues(repo).await {
                 Ok(issues) => {
                     read.repos_read += 1;
                     if issues.is_empty() {
                         // Also what a misspelt linear_project gets back.
                         tracing::warn!(repo = %repo.name, project = %repo.linear_project, "no open tickets in the Linear project");
                     }
-                    issues
+                    (crate::sources::now(), issues)
                 }
                 Err(e) => {
                     tracing::warn!(repo = %repo.name, error = %e, "reading the repo's tickets failed");
                     let kept =
                         if last.is_some() { "kept its tickets from an earlier read" } else { "no earlier tickets" };
                     read.errors.push(format!("{e} ({kept})"));
+                    // The source is only as fresh as the oldest tickets it kept.
+                    if let Some((at, _)) = &last {
+                        read.as_of = Some(read.as_of.map_or(*at, |a| a.min(*at)));
+                    }
                     last.unwrap_or_default()
                 }
             };
-            self.last.lock().unwrap_or_else(|e| e.into_inner()).insert(repo.name.clone(), issues.clone());
+            self.last.lock().unwrap_or_else(|e| e.into_inner()).insert(repo.name.clone(), (read_at, issues.clone()));
             read.issues.extend(issues);
         }
         read

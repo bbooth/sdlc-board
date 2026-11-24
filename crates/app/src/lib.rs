@@ -21,6 +21,8 @@ pub struct Reads {
     /// The latest read's number and start; `answered` is the last one that came back.
     started: Option<(u64, Instant)>,
     answered: u64,
+    /// When `snap` came back, to tell the ages by the server's clock.
+    got: Option<Instant>,
 }
 
 impl Reads {
@@ -47,10 +49,17 @@ impl Reads {
         if n > self.answered {
             self.answered = n;
             match read {
-                Ok(s) => (self.snap, self.error) = (Some(s), None),
+                Ok(s) => (self.snap, self.error, self.got) = (Some(s), None, Some(Instant::now())),
                 Err(e) => self.error = Some(e),
             }
         }
+    }
+
+    /// The server's time now, in Unix seconds: the snapshot's time plus how
+    /// long ago it came back, so a device clock that's off doesn't skew the ages.
+    pub fn server_now(&self, now: Instant) -> Option<i64> {
+        let (snap, got) = (self.snap.as_ref()?, self.got?);
+        Some(snap.generated_at + now.saturating_duration_since(got).as_secs() as i64)
     }
 
     /// Why the board may be out of date: the last read failed, or hasn't answered.

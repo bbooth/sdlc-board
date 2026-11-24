@@ -5,7 +5,7 @@ use board_api::Snapshot;
 use board_app::Reads;
 use eframe::egui;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 fn main() -> eframe::Result {
     let url = std::env::var("BOARD_URL").unwrap_or_else(|_| "http://localhost:8080".into());
@@ -55,9 +55,10 @@ impl eframe::App for BoardApp {
         self.fetch(&ctx, false);
         // Wake up to tick the ages and to read again when due.
         ctx.request_repaint_after(Duration::from_secs(1));
-        let (snap, problem, waiting) = {
+        let (snap, problem, waiting, now) = {
             let r = self.reads.lock().unwrap_or_else(|e| e.into_inner());
-            (r.snap.clone(), r.problem(Instant::now()), r.waiting(Instant::now()))
+            let t = Instant::now();
+            (r.snap.clone(), r.problem(t), r.waiting(t), r.server_now(t).unwrap_or(0))
         };
         egui::Panel::top("bar").show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -72,7 +73,6 @@ impl eframe::App for BoardApp {
                 }
             });
         });
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
         egui::CentralPanel::default().show(ui, |ui| match (&snap, &problem) {
             (Some(snap), _) => board_app::board(ui, snap, now),
             (None, Some(_)) => drop(ui.label("No board yet: the next read is due within 30 s.")),

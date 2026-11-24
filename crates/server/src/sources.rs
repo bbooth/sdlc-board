@@ -41,7 +41,7 @@ impl Source for crate::linear::Linear {
         let partial = read.errors.first().map(|e| {
             format!("{} of {} repos failed, first: {e}", read.errors.len(), read.errors.len() + read.repos_read)
         });
-        Ok(Read { issues: read.issues, partial, ..Read::default() })
+        Ok(Read { issues: read.issues, partial, as_of: read.as_of, ..Read::default() })
     }
 }
 

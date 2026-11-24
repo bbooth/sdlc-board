@@ -195,12 +195,18 @@ async fn one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates
     let linear = Linear::new(&format!("{}/graphql", f.url), "k", repos).unwrap();
     let state = sources::State::new();
     sources::refresh(&state, &linear).await;
+    let first_good = state.snapshot().sources.iter().find(|s| s.name == "linear").unwrap().last_good.unwrap();
+    // A later read, so a last_good of "now" would differ from the first read's time.
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
 
     f.sdlc_project_down.store(true, Relaxed);
     f.moved.store(true, Relaxed);
     sources::refresh(&state, &linear).await;
     let snap = state.snapshot();
-    let error = snap.sources.iter().find(|s| s.name == "linear").unwrap().last_error.clone().unwrap();
+    let status = snap.sources.iter().find(|s| s.name == "linear").unwrap().clone();
+    // Linear is as fresh as the kept tickets, not the read that kept them.
+    assert_eq!(status.last_good, Some(first_good));
+    let error = status.last_error.unwrap();
     assert!(error.starts_with("1 of 2 repos failed, first: Linear issues for SDLC board: "), "{error}");
     assert!(error.ends_with("(kept its tickets from an earlier read)"), "{error}");
     // TRU-10 kept its earlier stage; booking's TRU-6 is still there.
