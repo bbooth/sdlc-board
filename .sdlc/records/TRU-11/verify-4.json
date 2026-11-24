@@ -1,0 +1,169 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-11",
+  "round": 4,
+  "result": "pass",
+  "recorded_at": "2026-11-24T18:55:02.599Z",
+  "inputs": {
+    "branch": "feat/tru-11-every-repo-refresh",
+    "commit": "c234138",
+    "build_record": ".sdlc/records/TRU-11/build-4.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-11/build-4.json says pass at 3666c2f"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 3666c2f"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at c234138"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged c234138"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-5, AC-6, AC-7"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "20 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "11 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:every_repo_in_the_settings_is_covered passed: cargo test -p board-server --test sources -- --exact every_repo_in_the_settings_is_covered"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:sub_tickets_are_drawn_under_their_ticket_with_their_stages passed: cargo test -p board-app --test board -- --exact sub_tickets_are_drawn_under_their_ticket_with_their_stages"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board -- --exact needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:the_board_refreshes_itself_every_30_seconds passed: cargo test -p board-app --test board -- --exact the_board_refreshes_itself_every_30_seconds"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:ages_go_by_the_servers_clock passed: cargo test -p board-app --test board -- --exact ages_go_by_the_servers_clock"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:with_a_token_finished_checks_show_on_the_next_minutes_read passed: cargo test -p board-server --test sources -- --exact with_a_token_finished_checks_show_on_the_next_minutes_read"
+    },
+    {
+      "name": "rerun:AC-7",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:a_linear_project_that_never_read_has_nothing_to_keep passed: cargo test -p board-server --test sources -- --exact a_linear_project_that_never_read_has_nothing_to_keep"
+    },
+    {
+      "name": "rerun:AC-7",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates passed: cargo test -p board-server --test sources -- --exact one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates"
+    },
+    {
+      "name": "rerun:AC-7",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:a_failed_part_keeps_its_earlier_value_and_marks_the_source passed: cargo test -p board-server --test github -- --exact a_failed_part_keeps_its_earlier_value_and_marks_the_source"
+    },
+    {
+      "name": "rerun:AC-7",
+      "pass": true,
+      "detail": "crates/server/tests/sources.rs:a_failing_source_keeps_its_data_and_the_others_keep_updating passed: cargo test -p board-server --test sources -- --exact a_failing_source_keeps_its_data_and_the_others_keep_updating"
+    },
+    {
+      "name": "rerun:AC-7",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:a_failed_read_keeps_the_board_it_had passed: cargo test -p board-app --test board -- --exact a_failed_read_keeps_the_board_it_had"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "4 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/tests/board.rs:ages_go_by_the_servers_clock: the new second-board assertion can't catch a `got` kept from the first read (`self.got.or(Some(Instant::now()))` in finish()). Both reads finish within the same second and server_now() counts whole seconds, so that mutant still passes. It would show later boards' ages too large. Live ages were right."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Carried from round 3, still true: no test covers the ureq request deadline or the stale line's wrapping. Both were observed working live (timeout: global, wrapped GitHub error)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "AC-7 names the cluster, but the server has no cluster source yet, so that part is unexercised. AC-6's 'PR checks finish within 2 minutes' holds only with GITHUB_TOKEN: tokenless, server A's GitHub reads were 18:23:07, then 18:49:50. The egress proxy here reported a 15000/h limit for unauthenticated requests, so GitHub's real 60/h limit wasn't tested. The device-clock check used an LD_PRELOAD CLOCK_REALTIME shim (verify4-tru11/scripts/fakeclock.c)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Not from this diff: in a 1600 px window the Outcome and Blocked columns are past the right edge. Booking's real tickets (TRU-6, TRU-7 in Outcome) weren't visible until the proxy moved them. I didn't check whether the columns scroll."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-5 test crates/server/tests/sources.rs:every_repo_in_the_settings_is_covered: PASS; FAILS with `&& p.repo == issue.repo` removed from pr_for, and FAILS with each repo's list read between details",
+    "AC-5 test crates/app/tests/board.rs:sub_tickets_are_drawn_under_their_ticket_with_their_stages: PASS; FAILS with the sub-ticket repo label always shown (`if c.repo != t.repo` -> `if true`)",
+    "AC-5 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS; FAILS with the other-repo sub-ticket label hidden (`if false`)",
+    "AC-5 e2e board-server with board.toml + board-app under Xvfb; verify4-tru11/01-start.png, 02-a.png: TRU-8 (bbooth/sdlc-board) with TRU-11..14 nested and no repo repeated; TRU-6 and TRU-7 (bbooth/booking, Rollout round 1: pass, PR #49 and #53 merged)",
+    "AC-5 e2e board-server with BOARD_CONFIG=verify4-tru11/board3.toml; server3.log, linproxy3.log, ghproxy3.log: 'serving repos=3'; Linear queried for 'Booking', 'SDLC board', 'Lab notebook' at 18:52:42-43; GitHub pulls requested for bbooth/booking, bbooth/sdlc-board and bbooth/lab-notebook",
+    "AC-6 test crates/app/tests/board.rs:the_board_refreshes_itself_every_30_seconds: PASS; FAILS with waiting() without the GIVE_UP deadline, with finish() taking any answer, and with REFRESH at 60 s",
+    "AC-6 test crates/app/tests/board.rs:ages_go_by_the_servers_clock: PASS; FAILS with server_now() not adding the time since the snapshot came back; still PASSES with `got` kept from the first read",
+    "AC-6 test crates/server/tests/sources.rs:with_a_token_finished_checks_show_on_the_next_minutes_read: PASS",
+    "AC-6 e2e Linear proxy Stage override with the app running; flip.log, 03strip.png: TRU-11 -> Blocked at 18:26:16; shown in the app at 18:27:16 (60 s), with Needs you: Blocked TRU-11; no reload",
+    "AC-6 e2e apps with device clock -3 h and +3 h (LD_PRELOAD CLOCK_REALTIME shim) and a normal one, same server; 05-clock.png: all three: 'Last refreshed: github 11 min ago, linear 36 s ago'",
+    "AC-6 e2e server B stopped, held, then back; events.log, hang.log, watch-b.log, 11-down-hold-back.png: Connection refused shown with the board kept; while held: 'Reading…' then 'timeout: global', a read every ~30 s, threads 24-25 and sockets 2-3; server back 18:43:08 with 5 connections still held: error cleared by 18:43:32",
+    "AC-7 test crates/server/tests/sources.rs:a_linear_project_that_never_read_has_nothing_to_keep: PASS; FAILS with a failed never-read project stored as (0, []) (round 3's bug), and FAILS with it stored as (now, [])",
+    "AC-7 test crates/server/tests/sources.rs:one_failing_linear_project_keeps_its_tickets_and_the_other_repo_updates: PASS; FAILS with the kept tickets dropped, with as_of not set, with any repo error failing the whole read, with the partial error dropped, and (new) with the kept tickets restamped to now on each failure",
+    "AC-7 test crates/server/tests/github.rs:a_failed_part_keeps_its_earlier_value_and_marks_the_source: PASS; FAILS with a failed repo's (empty) PRs stored as if read",
+    "AC-7 test crates/server/tests/sources.rs:a_failing_source_keeps_its_data_and_the_others_keep_updating: PASS; FAILS with the error dropped, with the data cleared, and with last_good moved forward on failure",
+    "AC-7 test crates/app/tests/board.rs:a_failed_read_keeps_the_board_it_had: PASS; FAILS with finish() clearing the snapshot on Err",
+    "AC-7 e2e server B, Linear 'SDLC board' and GitHub failing from start; nevergood.log, 06-nevergood-1.png, 06-nevergood-2.png: linear last_good 18:23:05, 18:24:06, 18:25:06 across reads, never epoch; '(no earlier tickets)'; github '(no good read yet) ... (no earlier PRs)'; booking TRU-6 updated",
+    "AC-7 e2e server B, 'SDLC board' failing after a good read; proj.log, 04-proj-b.png, linproxy2.log: last_good held at 18:28:08 over 5 failing reads; TRU-11 kept at Verify; booking TRU-6 moved to Adversarial review; '(kept its tickets from an earlier read)'",
+    "AC-7 e2e server B, all Linear 500; 12-b-linear-down.png: tickets kept; 'linear is stale (last good read 18:44 UTC, 2 min ago) ... (kept its tickets from an earlier read)'; github fresh",
+    "AC-7 e2e server A, GitHub 500 after a good read; 13-ghdown-8.png, flip.log: PRs kept; 'github is stale (last good read 18:23 UTC, 29 min ago)' with the 500; Linear updated TRU-11 to PR review"
+  ]
+}
