@@ -19,7 +19,7 @@ fn pr(ticket: &str, number: u64, checks: Checks, draft: bool) -> PrInfo {
     let url = format!("https://github.com/bbooth/booking/pull/{number}");
     let pr = Pr { number, title: format!("{ticket}: pr"), url, checks, merged: false };
     let (at, gate_read, read_at) = (format!("sha{number}"), true, 0);
-    PrInfo { ticket: ticket.into(), pr, draft, by_branch: true, gate: None, at, gate_read, read_at }
+    PrInfo { repo: "r".into(), ticket: ticket.into(), pr, draft, by_branch: true, gate: None, at, gate_read, read_at }
 }
 
 #[test]

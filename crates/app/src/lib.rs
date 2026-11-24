@@ -2,16 +2,38 @@
 
 use board_api::{Checks, Snapshot, Ticket};
 use eframe::egui;
+use std::time::Duration;
 
-/// Failed sources, what needs the owner, then a column per stage of cards with sub-tickets nested.
-pub fn board(ui: &mut egui::Ui, snap: &Snapshot) {
+/// How often the app reads the snapshot again. The server reads Linear every
+/// minute, so a change shows within two.
+pub const REFRESH: Duration = Duration::from_secs(30);
+
+/// Whether to read the snapshot now: none is in flight and the last read
+/// started at least [`REFRESH`] ago, or there hasn't been one.
+pub fn due(since_last: Option<Duration>, in_flight: bool) -> bool {
+    !in_flight && since_last.is_none_or(|d| d >= REFRESH)
+}
+
+fn ago(secs: i64) -> String {
+    match secs.max(0) {
+        s if s < 60 => format!("{s} s ago"),
+        s if s < 3600 => format!("{} min ago", s / 60),
+        s => format!("{} h ago", s / 3600),
+    }
+}
+
+/// When the snapshot was made, each stale source with its last good read and
+/// error, what needs the owner, then a column per stage of cards with
+/// sub-tickets nested. `now` is Unix seconds.
+pub fn board(ui: &mut egui::Ui, snap: &Snapshot, now: i64) {
+    ui.small(format!("Last refreshed {}", ago(now - snap.generated_at)));
     for s in &snap.sources {
         if let Some(err) = &s.last_error {
-            let age = match s.last_good {
-                Some(t) => format!("data is {} min old", (snap.generated_at - t).max(0) / 60),
-                None => "no data yet".into(),
+            let when = match s.last_good {
+                Some(t) => format!("last good read {:02}:{:02} UTC, {}", t % 86400 / 3600, t % 3600 / 60, ago(now - t)),
+                None => "no good read yet".into(),
             };
-            ui.colored_label(ui.visuals().warn_fg_color, format!("{}: {age}: {err}", s.name));
+            ui.colored_label(ui.visuals().warn_fg_color, format!("{} is stale ({when}): {err}", s.name));
         }
     }
     if !snap.needs_you.is_empty() {

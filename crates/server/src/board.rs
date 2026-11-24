@@ -48,7 +48,7 @@ fn nest(issue: &Issue, children: &HashMap<&str, Vec<&Issue>>, prs: &[PrInfo]) ->
     let mut kids: Vec<Ticket> =
         children.get(issue.id.as_str()).map(|v| v.iter().map(|c| nest(c, children, prs)).collect()).unwrap_or_default();
     kids.sort_by(|a, b| a.id.cmp(&b.id));
-    let pr = pr_for(prs, &issue.id);
+    let pr = pr_for(prs, issue);
     Ticket {
         id: issue.id.clone(),
         title: issue.title.clone(),
@@ -61,9 +61,12 @@ fn nest(issue: &Issue, children: &HashMap<&str, Vec<&Issue>>, prs: &[PrInfo]) ->
     }
 }
 
-/// The ticket's PR: one whose branch names it, then an open one, then the newest.
-fn pr_for<'a>(prs: &'a [PrInfo], id: &str) -> Option<&'a PrInfo> {
-    prs.iter().filter(|p| p.ticket == id).max_by_key(|p| (p.by_branch, !p.pr.merged, p.pr.number))
+/// The ticket's PR, from its own repo: one whose branch names it, then an
+/// open one, then the newest. Repos can share a Linear team, so another
+/// repo's PR naming the ticket isn't its.
+fn pr_for<'a>(prs: &'a [PrInfo], issue: &Issue) -> Option<&'a PrInfo> {
+    let own = prs.iter().filter(|p| p.ticket == issue.id && p.repo == issue.repo);
+    own.max_by_key(|p| (p.by_branch, !p.pr.merged, p.pr.number))
 }
 
 /// What waits on the owner: specs to approve, PRs in PR review whose checks
@@ -78,7 +81,7 @@ pub fn needs_you(issues: &[Issue], prs: &[PrInfo]) -> Vec<NeedsYou> {
     let in_stage = |stage: &'static str| issues.iter().filter(move |i| i.open && i.stage.as_deref() == Some(stage));
     let mut out: Vec<NeedsYou> =
         in_stage("Ready for approval").map(|i| item("approve", &i.id, &i.title, &i.url)).collect();
-    let in_review = in_stage("PR review").filter_map(|i| pr_for(prs, &i.id));
+    let in_review = in_stage("PR review").filter_map(|i| pr_for(prs, i));
     let green = in_review.filter(|p| p.pr.checks == Checks::Pass && !p.draft && !p.pr.merged);
     out.extend(green.map(|p| item("merge", &p.ticket, &p.pr.title, &p.pr.url)));
     out.extend(in_stage("Blocked").map(|i| item("blocked", &i.id, &i.title, &i.url)));

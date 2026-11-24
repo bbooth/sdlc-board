@@ -11,7 +11,7 @@ const SNAPSHOT: &str = r#"{"generated_at": 0, "sources": [], "columns": [{"stage
 #[test]
 fn sub_tickets_are_drawn_under_their_ticket_with_their_stages() {
     let snap: Snapshot = serde_json::from_str(SNAPSHOT).unwrap();
-    let harness = Harness::new_ui(|ui| board_app::board(ui, &snap));
+    let harness = Harness::new_ui(|ui| board_app::board(ui, &snap, 1000));
     for text in ["Spec (0)", "Build (1)", "TRU-8", "One board", "TRU-9", "· Verify", "TRU-10", "· Plan"] {
         harness.get_by_label(text);
     }
@@ -38,7 +38,7 @@ const NEEDS_YOU: &str = r#"{"generated_at": 1000, "sources": [{"name": "linear",
 #[test]
 fn needs_you_is_listed_first_and_cards_show_their_gate_and_pr() {
     let snap: Snapshot = serde_json::from_str(NEEDS_YOU).unwrap();
-    let harness = Harness::new_ui(|ui| board_app::board(ui, &snap));
+    let harness = Harness::new_ui(|ui| board_app::board(ui, &snap, 1000));
     let top = |text: &str| harness.get_by_label(text).rect().top();
     let column = top("Build (1)");
     let items = [
@@ -54,9 +54,22 @@ fn needs_you_is_listed_first_and_cards_show_their_gate_and_pr() {
     harness.get_by_label("Adversarial review round 2: pass");
     harness.get_by_label("PR #4 checks pending");
     harness.get_by_label("PR #2 merged");
-    let stale = "github: data is 10 min old: GitHub /repos/b/s/pulls: 403 rate limited";
+    // AC-7, app side: a failing source is marked stale with when it was last read and why.
+    let stale = "github is stale (last good read 00:06 UTC, 10 min ago): GitHub /repos/b/s/pulls: 403 rate limited";
     assert!(top(stale) < column);
-    assert!(harness.query_by_label_contains("linear: ").is_none());
+    assert!(harness.query_by_label_contains("linear is stale").is_none());
+    // AC-6, app side: when the data was last refreshed.
+    harness.get_by_label("Last refreshed 0 s ago");
+}
+
+// AC-6, app side: the app reads the snapshot again every 30 seconds, one read at a time.
+#[test]
+fn the_board_refreshes_itself_every_30_seconds() {
+    use std::time::Duration;
+    assert!(board_app::due(None, false));
+    assert!(!board_app::due(Some(Duration::from_secs(29)), false));
+    assert!(board_app::due(Some(Duration::from_secs(30)), false));
+    assert!(!board_app::due(Some(Duration::from_secs(90)), true));
 }
 
 // A check state from a newer server reads as unknown rather than failing the whole snapshot.

@@ -23,6 +23,15 @@
   A failed checks read keeps the last value for the same commit, or shows
   "checks unknown", and the source's age is that of the oldest data kept.
 
+- TRU-11: `board.toml` lists booking and sdlc-board; adding a repo is a
+  new `[[repos]]` entry (GitHub name, Linear team and project) and a
+  restart. A ticket's PR comes from its own repo, and every repo's PR list
+  is read before any PR's details. The app reads the snapshot every 30
+  seconds and shows when it last did; a failing source keeps its last data
+  and is marked stale with its last good read and error, and a failed app
+  read keeps the board it had. A PR's checks show within 2 minutes only
+  with `GITHUB_TOKEN` set: without one, GitHub reads are spaced by cost.
+
 ## Next
 
-- TRU-11, TRU-12, then TRU-13 and TRU-14.
+- TRU-12, then TRU-13 and TRU-14.
