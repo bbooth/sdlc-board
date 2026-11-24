@@ -1,4 +1,5 @@
 use crate::board::{self, Issue};
+use crate::github::PrInfo;
 use crate::metrics::Metrics;
 use board_api::{Snapshot, SourceStatus};
 use std::collections::BTreeMap;
@@ -11,15 +12,31 @@ pub const INTERVAL: Duration = Duration::from_secs(60);
 /// Something the board reads on an interval.
 pub trait Source: Send + Sync + 'static {
     fn name(&self) -> &'static str;
-    fn read(&self) -> impl Future<Output = anyhow::Result<Vec<Issue>>> + Send;
+    fn read(&self) -> impl Future<Output = anyhow::Result<Read>> + Send;
+}
+
+/// What one read of a source returned.
+#[derive(Default)]
+pub struct Read {
+    pub issues: Vec<Issue>,
+    pub prs: Vec<PrInfo>,
 }
 
 impl Source for crate::linear::Linear {
     fn name(&self) -> &'static str {
         "linear"
     }
-    fn read(&self) -> impl Future<Output = anyhow::Result<Vec<Issue>>> + Send {
-        self.issues()
+    async fn read(&self) -> anyhow::Result<Read> {
+        Ok(Read { issues: self.issues().await?, ..Read::default() })
+    }
+}
+
+impl Source for crate::github::GitHub {
+    fn name(&self) -> &'static str {
+        "github"
+    }
+    async fn read(&self) -> anyhow::Result<Read> {
+        Ok(Read { prs: self.prs().await?, ..Read::default() })
     }
 }
 
@@ -32,7 +49,7 @@ pub struct State {
 
 #[derive(Default)]
 struct Part {
-    issues: Vec<Issue>,
+    read: Read,
     last_good: Option<i64>,
     last_error: Option<String>,
 }
@@ -48,7 +65,8 @@ impl State {
 
     pub fn snapshot(&self) -> Snapshot {
         let data = self.data.read().unwrap_or_else(|e| e.into_inner());
-        let issues: Vec<Issue> = data.values().flat_map(|p| p.issues.iter().cloned()).collect();
+        let issues: Vec<Issue> = data.values().flat_map(|p| p.read.issues.iter().cloned()).collect();
+        let prs: Vec<PrInfo> = data.values().flat_map(|p| p.read.prs.iter().cloned()).collect();
         Snapshot {
             generated_at: now(),
             sources: data
@@ -59,7 +77,8 @@ impl State {
                     last_error: p.last_error.clone(),
                 })
                 .collect(),
-            columns: board::columns(&issues),
+            columns: board::columns(&issues, &prs),
+            needs_you: board::needs_you(&issues, &prs),
         }
     }
 
@@ -89,9 +108,10 @@ pub async fn refresh<S: Source>(state: &State, source: &S) {
     let mut data = state.data.write().unwrap_or_else(|e| e.into_inner());
     let part = data.entry(name).or_default();
     match result {
-        Ok(issues) => {
-            tracing::info!(source = name, issues = issues.len(), duration_s = secs, "source read");
-            part.issues = issues;
+        Ok(read) => {
+            let (issues, prs) = (read.issues.len(), read.prs.len());
+            tracing::info!(source = name, issues, prs, duration_s = secs, "source read");
+            part.read = read;
             part.last_good = Some(now());
             part.last_error = None;
         }

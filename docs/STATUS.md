@@ -9,6 +9,12 @@
   sub-tickets nested. `LINEAR_API_KEY=... cargo run -p board-server`, then
   `cargo run -p board-app` (`BOARD_URL`, default `http://localhost:8080`).
 
+- TRU-10: the server also reads each repo's open PRs from GitHub (checks,
+  and gate records on the PR's branch) and gate output posted on Linear
+  tickets. Cards show the latest gate and the PR; a "Needs you" list above
+  the columns has specs to approve, green PRs to merge and blocked tickets.
+  `GITHUB_TOKEN` is optional for public repos (`GITHUB_ENDPOINT` to override).
+
 ## Next
 
-- TRU-10 (PRs, gates, "Needs you"), TRU-11, TRU-12, then TRU-13 and TRU-14.
+- TRU-11, TRU-12, then TRU-13 and TRU-14.

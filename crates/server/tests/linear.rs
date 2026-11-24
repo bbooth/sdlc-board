@@ -28,7 +28,7 @@ fn repo() -> Repo {
 async fn open_tickets_land_once_in_their_stage_with_sub_tickets_nested() {
     let endpoint = fake_linear().await;
     let issues = Linear::new(&endpoint, "test-key", vec![repo()]).unwrap().issues().await.unwrap();
-    let cols = board::columns(&issues);
+    let cols = board::columns(&issues, &[]);
 
     let stages: Vec<&str> = cols.iter().map(|c| c.stage.as_str()).collect();
     assert_eq!(stages, board_api::STAGES);
@@ -43,6 +43,9 @@ async fn open_tickets_land_once_in_their_stage_with_sub_tickets_nested() {
     let parent = &cols.iter().find(|c| c.stage == "Outcome").unwrap().tickets[0];
     let kids: Vec<(&str, &str)> = parent.children.iter().map(|c| (c.id.as_str(), c.stage.as_str())).collect();
     assert_eq!(kids, [("TRU-6", "Rollout"), ("TRU-7", "Build")]);
+    // Gate output posted as comments gives the card its latest gate.
+    let gate = parent.children[1].gate.as_ref().unwrap();
+    assert_eq!((gate.stage.as_str(), gate.round, gate.pass), ("Build", 2, true));
     assert_eq!(parent.repo, "bbooth/booking");
 
     // Each open ticket appears exactly once; the completed one not at all.

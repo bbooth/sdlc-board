@@ -1,7 +1,7 @@
 {"data":{"issues":{"pageInfo":{"hasNextPage":false,"endCursor":"c1"},"nodes":[
 {"identifier":"TRU-5","title":"Drop unused tenant fields","url":"https://linear.app/t/TRU-5","state":{"type":"started"},"parent":null,"labels":{"nodes":[{"name":"Feature","parent":null},{"name":"Outcome","parent":{"name":"Stage"}}]}},
 {"identifier":"TRU-6","title":"Stop using the fields","url":"https://linear.app/t/TRU-6","state":{"type":"started"},"parent":{"identifier":"TRU-5"},"labels":{"nodes":[{"name":"Rollout","parent":{"name":"Stage"}}]}},
-{"identifier":"TRU-7","title":"Drop the columns","url":"https://linear.app/t/TRU-7","state":{"type":"unstarted"},"parent":{"identifier":"TRU-5"},"labels":{"nodes":[{"name":"Build","parent":{"name":"Stage"}}]}},
+{"identifier":"TRU-7","title":"Drop the columns","url":"https://linear.app/t/TRU-7","state":{"type":"unstarted"},"parent":{"identifier":"TRU-5"},"labels":{"nodes":[{"name":"Build","parent":{"name":"Stage"}}]},"comments":{"nodes":[{"body":"### Gate: Build (fail) · round 1\n- Checks: ..."},{"body":"### Gate: Build (pass) · round 2"},{"body":"Looks good"}]}},
 {"identifier":"TRU-8","title":"One board","url":"https://linear.app/t/TRU-8","state":{"type":"unstarted"},"parent":null,"labels":{"nodes":[{"name":"Ready for approval","parent":{"name":"Stage"}}]}},
 {"identifier":"TRU-3","title":"Shipped long ago","url":"https://linear.app/t/TRU-3","state":{"type":"completed"},"parent":null,"labels":{"nodes":[{"name":"Outcome","parent":{"name":"Stage"}}]}},
 {"identifier":"TRU-4","title":"An idea","url":"https://linear.app/t/TRU-4","state":{"type":"backlog"},"parent":null,"labels":{"nodes":[]}}

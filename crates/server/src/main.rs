@@ -1,4 +1,4 @@
-use board_server::{config::Config, linear, routes, sources};
+use board_server::{config::Config, github, linear, routes, sources};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -13,6 +13,10 @@ async fn main() -> anyhow::Result<()> {
     let state = sources::State::new();
     let linear = linear::Linear::new(&endpoint, &key, config.repos.clone())?;
     tokio::spawn(sources::run(state.clone(), linear));
+    // A token is optional for public repos, but unauthenticated reads are rate limited.
+    let gh_endpoint = std::env::var("GITHUB_ENDPOINT").unwrap_or_else(|_| github::ENDPOINT.into());
+    let github = github::GitHub::new(&gh_endpoint, std::env::var("GITHUB_TOKEN").ok(), config.repos.clone())?;
+    tokio::spawn(sources::run(state.clone(), github));
     let listen = config.listen.as_deref().unwrap_or("0.0.0.0:8080");
     let listener = tokio::net::TcpListener::bind(listen).await?;
     tracing::info!(listen, repos = config.repos.len(), "serving");
