@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-10",
+  "round": 8,
+  "result": "pass",
+  "recorded_at": "2026-11-24T14:13:39.908Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "869f0a5"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-10-prs-gates-needs-you"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "38 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "6 test files changed with 10 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "790 lines changed, counting 428 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 869f0a5"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "4 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/server/src/linear.rs:85: no test covers the comment's time getting from Linear onto the gate. The fixture crates/server/tests/fixtures/linear_board.json:4 has no createdAt on any comment, and the github.rs tests call gates::from_comment(body, Some(..)) directly, so dropping the query field or the key would leave every comment gate at at: None and no test would fail.",
+      "reason": "The fixture's TRU-7 comments now carry createdAt, with Build round 2 posted after a failed Verify round 1; tests/linear.rs asserts the card shows Build 2 and its time. With the createdAt read replaced by None, that test fails."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:218-219: each PR now costs one file read per stage that has records, not one in total. Without GITHUB_TOKEN the first read after a start can go past the 45-request cap with many tied PRs, so it takes several spaced reads before every card has its gate; again after each restart or push.",
+      "reason": "Noted in docs/STATUS.md next to the 45-request budget."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/linear.rs:14: comments(first: 50) has no ordering; if Linear gave the oldest 50 first, a ticket with more than 50 comments would show a stale gate.",
+      "reason": "Checked against real Linear: comments come newest first (TRU-10's first three are 07:10, 07:06, 06:58). The query now asks for orderBy: createdAt explicitly, with a comment saying why."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/github.rs:221: a record without recorded_at becomes a Gate with at: None, which sorts below every timed gate, and nothing is logged.",
+      "reason": "A warn is logged naming the file."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
