@@ -2,24 +2,61 @@
 
 use board_api::{Checks, Snapshot, Ticket};
 use eframe::egui;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// How often the app reads the snapshot again. The server reads Linear every
 /// minute, so a change shows within two.
 pub const REFRESH: Duration = Duration::from_secs(30);
+/// A read with no answer by then is given up on. The HTTP client has no
+/// timeout for a server that accepts and never answers.
+pub const GIVE_UP: Duration = Duration::from_secs(20);
 
-/// Whether to read the snapshot now: none is in flight and the last read
-/// started at least [`REFRESH`] ago, or there hasn't been one.
-pub fn due(since_last: Option<Duration>, in_flight: bool) -> bool {
-    !in_flight && since_last.is_none_or(|d| d >= REFRESH)
+/// The app's reads of the snapshot: the last board read, kept when a later
+/// read fails, so a server that's down doesn't blank it.
+#[derive(Default)]
+pub struct Reads {
+    pub snap: Option<Snapshot>,
+    error: Option<String>,
+    /// The latest read's number and start; `answered` is the last one that came back.
+    started: Option<(u64, Instant)>,
+    answered: u64,
 }
 
-/// Takes in a read of the snapshot: a failed one keeps the board it had and
-/// says why, so a server that's down doesn't blank it.
-pub fn take(snap: &mut Option<Snapshot>, error: &mut Option<String>, read: Result<Snapshot, String>) {
-    match read {
-        Ok(s) => (*snap, *error) = (Some(s), None),
-        Err(e) => *error = Some(e),
+impl Reads {
+    /// Starts a read if one is due: the first, [`REFRESH`] after the last
+    /// started, or on `asked` when none is waiting on an answer. A read
+    /// waiting longer than [`GIVE_UP`] doesn't hold up the next. Returns its number.
+    pub fn start(&mut self, now: Instant, asked: bool) -> Option<u64> {
+        let since = self.started.map(|(_, t)| now - t);
+        let waiting = self.started.is_some_and(|(n, _)| n > self.answered) && since < Some(GIVE_UP);
+        let due = since.is_none_or(|d| d >= REFRESH) || asked;
+        let n = self.started.map_or(1, |(n, _)| n + 1);
+        (due && !waiting).then(|| {
+            self.started = Some((n, now));
+            n
+        })
+    }
+
+    /// Takes in read `n`'s answer. One older than the latest read is dropped,
+    /// so a slow answer can't replace a newer board.
+    pub fn finish(&mut self, n: u64, read: Result<Snapshot, String>) {
+        if self.started.is_some_and(|(latest, _)| latest == n) {
+            self.answered = n;
+            match read {
+                Ok(s) => (self.snap, self.error) = (Some(s), None),
+                Err(e) => self.error = Some(e),
+            }
+        }
+    }
+
+    /// Why the board may be out of date: the last read failed, or hasn't answered.
+    pub fn problem(&self, now: Instant) -> Option<String> {
+        match self.started {
+            Some((n, t)) if n > self.answered && now - t >= GIVE_UP => {
+                Some(format!("no answer for {} s", (now - t).as_secs()))
+            }
+            _ => self.error.clone(),
+        }
     }
 }
 
@@ -31,19 +68,23 @@ fn ago(secs: i64) -> String {
     }
 }
 
-/// How old the oldest source's data is, each stale source with its last good
-/// read and error, what needs the owner, then a column per stage of cards
-/// with sub-tickets nested. `now` is Unix seconds.
+/// How old each source's data is, each stale source with its last good read
+/// and error, what needs the owner, then a column per stage of cards with
+/// sub-tickets nested. `now` is Unix seconds.
 pub fn board(ui: &mut egui::Ui, snap: &Snapshot, now: i64) {
-    let oldest = snap.sources.iter().filter_map(|s| s.last_good).min().unwrap_or(snap.generated_at);
-    ui.small(format!("Last refreshed {}", ago(now - oldest)));
+    let read =
+        |s: &board_api::SourceStatus| format!("{} {}", s.name, s.last_good.map_or("never".into(), |t| ago(now - t)));
+    let sources: Vec<String> = snap.sources.iter().map(read).collect();
+    ui.small(format!("Last refreshed: {}", sources.join(", ")));
     for s in &snap.sources {
         if let Some(err) = &s.last_error {
             let when = match s.last_good {
                 Some(t) => format!("last good read {:02}:{:02} UTC, {}", t % 86400 / 3600, t % 3600 / 60, ago(now - t)),
                 None => "no good read yet".into(),
             };
-            ui.colored_label(ui.visuals().warn_fg_color, format!("{} is stale ({when}): {err}", s.name));
+            let text =
+                egui::RichText::new(format!("{} is stale ({when}): {err}", s.name)).color(ui.visuals().warn_fg_color);
+            ui.add(egui::Label::new(text).wrap());
         }
     }
     if !snap.needs_you.is_empty() {

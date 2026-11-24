@@ -1,5 +1,6 @@
 use board_api::{Checks, Pr, Snapshot};
 use egui_kittest::{kittest::Queryable, Harness};
+use std::time::{Duration, Instant};
 
 const SNAPSHOT: &str = r#"{"generated_at": 0, "sources": [], "columns": [{"stage": "Spec", "tickets": []}, {"stage": "Build",
   "tickets": [{"id": "TRU-8", "title": "One board", "url": "u", "repo": "r", "stage": "Build", "children": [
@@ -58,8 +59,8 @@ fn needs_you_is_listed_first_and_cards_show_their_gate_and_pr() {
     let stale = "github is stale (last good read 00:06 UTC, 10 min ago): GitHub /repos/b/s/pulls: 403 rate limited";
     assert!(top(stale) < column);
     assert!(harness.query_by_label_contains("linear is stale").is_none());
-    // AC-6, app side: when the data was last refreshed, by its oldest source.
-    harness.get_by_label("Last refreshed 10 min ago");
+    // AC-6, app side: when each source's data was last refreshed.
+    harness.get_by_label("Last refreshed: linear 0 s ago, github 10 min ago");
     // AC-5, app side: the card names its repo.
     harness.get_by_label("bbooth/sdlc-board");
 }
@@ -67,20 +68,37 @@ fn needs_you_is_listed_first_and_cards_show_their_gate_and_pr() {
 // AC-7, app side: a failed read of the snapshot keeps the board it had.
 #[test]
 fn a_failed_read_keeps_the_board_it_had() {
-    let (mut snap, mut error) = (None, None);
-    board_app::take(&mut snap, &mut error, Ok(serde_json::from_str(SNAPSHOT).unwrap()));
-    board_app::take(&mut snap, &mut error, Err("connection refused".into()));
-    assert_eq!((snap.map(|s| s.columns.len()), error.as_deref()), (Some(2), Some("connection refused")));
+    let (mut reads, t) = (board_app::Reads::default(), Instant::now());
+    let n = reads.start(t, false).unwrap();
+    reads.finish(n, Ok(serde_json::from_str(SNAPSHOT).unwrap()));
+    let n = reads.start(t + secs(30), false).unwrap();
+    reads.finish(n, Err("connection refused".into()));
+    assert_eq!(reads.snap.as_ref().map(|s| s.columns.len()), Some(2));
+    assert_eq!(reads.problem(t + secs(31)).as_deref(), Some("connection refused"));
 }
 
-// AC-6, app side: the app reads the snapshot again every 30 seconds, one read at a time.
+fn secs(n: u64) -> Duration {
+    Duration::from_secs(n)
+}
+
+// AC-6, app side: the app reads the snapshot every 30 seconds, one at a
+// time; a read the server never answers is given up on after 20, so the
+// board can't freeze on it, and its late answer can't replace a newer board.
 #[test]
 fn the_board_refreshes_itself_every_30_seconds() {
-    use std::time::Duration;
-    assert!(board_app::due(None, false));
-    assert!(!board_app::due(Some(Duration::from_secs(29)), false));
-    assert!(board_app::due(Some(Duration::from_secs(30)), false));
-    assert!(!board_app::due(Some(Duration::from_secs(90)), true));
+    let (mut reads, t) = (board_app::Reads::default(), Instant::now());
+    let first = reads.start(t, false).unwrap();
+    assert_eq!(reads.start(t + secs(10), true), None, "Refresh waits for the answer");
+    reads.finish(first, Err("refused".into()));
+    assert_eq!(reads.start(t + secs(20), false), None);
+    let asked = reads.start(t + secs(21), true).expect("Refresh reads now once answered");
+    reads.finish(asked, Err("refused".into()));
+    let hung = reads.start(t + secs(51), false).unwrap();
+    assert_eq!(reads.problem(t + secs(76)).as_deref(), Some("no answer for 25 s"));
+    let next = reads.start(t + secs(81), false).unwrap();
+    reads.finish(next, Ok(serde_json::from_str(SNAPSHOT).unwrap()));
+    reads.finish(hung, Err("late".into()));
+    assert_eq!((reads.snap.is_some(), reads.problem(t + secs(82))), (true, None));
 }
 
 // A check state from a newer server reads as unknown rather than failing the whole snapshot.

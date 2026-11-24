@@ -2,18 +2,10 @@
 //! holds a Linear or GitHub token.
 
 use board_api::Snapshot;
+use board_app::Reads;
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-
-/// The last snapshot read, kept when a later read fails, and that failure.
-#[derive(Default)]
-struct Latest {
-    snap: Option<Snapshot>,
-    error: Option<String>,
-    in_flight: bool,
-    started: Option<Instant>,
-}
 
 fn main() -> eframe::Result {
     let url = std::env::var("BOARD_URL").unwrap_or_else(|_| "http://localhost:8080".into());
@@ -23,31 +15,28 @@ fn main() -> eframe::Result {
             viewport: egui::ViewportBuilder::default().with_inner_size([2000.0, 700.0]),
             ..Default::default()
         },
-        Box::new(move |_| Ok(Box::new(BoardApp { url, latest: Arc::default() }))),
+        Box::new(move |_| Ok(Box::new(BoardApp { url, reads: Arc::default() }))),
     )
 }
 
 struct BoardApp {
     url: String,
-    latest: Arc<Mutex<Latest>>,
+    reads: Arc<Mutex<Reads>>,
 }
 
 impl BoardApp {
-    fn fetch(&self, ctx: egui::Context) {
-        {
-            let mut l = self.latest.lock().unwrap_or_else(|e| e.into_inner());
-            (l.in_flight, l.started) = (true, Some(Instant::now()));
-        }
-        let latest = self.latest.clone();
+    /// Reads the snapshot if one is due, or now if `asked` and none is waiting.
+    fn fetch(&self, ctx: &egui::Context, asked: bool) {
+        let Some(n) = self.reads.lock().unwrap_or_else(|e| e.into_inner()).start(Instant::now(), asked) else {
+            return;
+        };
+        let (reads, ctx) = (self.reads.clone(), ctx.clone());
         let req = ehttp::Request::get(format!("{}/v1/snapshot", self.url.trim_end_matches('/')));
         ehttp::fetch(req, move |res| {
             let parsed = res
                 .and_then(|r| if r.ok { Ok(r) } else { Err(format!("{} {}", r.status, r.status_text)) })
                 .and_then(|r| serde_json::from_slice::<Snapshot>(&r.bytes).map_err(|e| e.to_string()));
-            let mut l = latest.lock().unwrap_or_else(|e| e.into_inner());
-            let Latest { snap, error, in_flight, .. } = &mut *l;
-            *in_flight = false;
-            board_app::take(snap, error, parsed);
+            reads.lock().unwrap_or_else(|e| e.into_inner()).finish(n, parsed);
             ctx.request_repaint();
         });
     }
@@ -56,27 +45,20 @@ impl BoardApp {
 impl eframe::App for BoardApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let (since, in_flight) = {
-            let l = self.latest.lock().unwrap_or_else(|e| e.into_inner());
-            (l.started.map(|t| t.elapsed()), l.in_flight)
-        };
-        if board_app::due(since, in_flight) {
-            self.fetch(ctx.clone());
-        }
-        // Wake up to tick the "last refreshed" age and to read again when due.
+        self.fetch(&ctx, false);
+        // Wake up to tick the ages and to read again when due.
         ctx.request_repaint_after(Duration::from_secs(1));
-        let (snap, error) = {
-            let l = self.latest.lock().unwrap_or_else(|e| e.into_inner());
-            (l.snap.clone(), l.error.clone())
+        let (snap, problem) = {
+            let r = self.reads.lock().unwrap_or_else(|e| e.into_inner());
+            (r.snap.clone(), r.problem(Instant::now()))
         };
         egui::Panel::top("bar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("SDLC board");
-                // One read at a time, so an older answer can't land after a newer one.
-                if ui.add_enabled(!in_flight, egui::Button::new("Refresh")).clicked() {
-                    self.fetch(ctx.clone());
+                if ui.button("Refresh").clicked() {
+                    self.fetch(&ctx, true);
                 }
-                if let Some(e) = &error {
+                if let Some(e) = &problem {
                     let msg = format!("Couldn't refresh from {}: {e}", self.url);
                     ui.colored_label(ui.visuals().error_fg_color, msg);
                 }

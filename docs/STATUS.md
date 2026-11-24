@@ -27,10 +27,10 @@
   new `[[repos]]` entry (GitHub name, Linear team and project) and a
   restart. A ticket's PR comes from its own repo, and every repo's PR list
   is read before any PR's details. The app reads the snapshot every 30
-  seconds and shows when it last did; a failing source keeps its last data
-  and is marked stale with its last good read and error, and a failed app
-  read keeps the board it had. "Last refreshed" is the age of the oldest
-  source's data. A PR's checks show within 2 minutes only with
+  seconds and shows how old each source's data is; a failing source keeps
+  its last data and is marked stale with its last good read and error. A
+  failed app read keeps the board it had, and one the server never answers
+  is given up on after 20 seconds. A PR's checks show within 2 minutes only with
   `GITHUB_TOKEN` set (GitHub is then read every minute): without one,
   GitHub reads are spaced by cost, often 20 minutes or more.
 
