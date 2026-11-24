@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-12",
+  "round": 3,
+  "result": "pass",
+  "recorded_at": "2026-11-24T20:48:33.894Z",
+  "inputs": {
+    "branch": "feat/tru-12-deploy-web-access",
+    "commit": "831aad4"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-12-deploy-web-access"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "31 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "4 test files changed with 6 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "794 lines changed, counting 160 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 831aad4"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "6 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "Adversarial review round 1 [operability]: the image job runs on Image Updater's write-back commit to deploy/.argocd-source-sdlc-board.yaml, rebuilds with a new digest, and loops.",
+      "reason": "CI's push trigger ignores deploy/.argocd-source-sdlc-board.yaml (paths-ignore), so the write-back commit runs no workflow; .dockerignore also leaves deploy/, argocd/, docs/ and .sdlc/ out of the build context, so chart or docs commits don't change the image's inputs."
+    },
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "Adversarial review round 1 [web]: a web tab open past the Access session follows Cloudflare's redirect cross-origin, fails with 'JsValue(TypeError: Failed to fetch …)' every 30 s, and nothing says the login expired.",
+      "reason": "The web fetch sets redirect: manual; an opaqueredirect answer shows 'your Cloudflare Access login has expired: reload the page' in the bar over the kept board. Other non-2xx answers show their status."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Task review round 3: the envFrom swap let the hand-applied Secret set any variable the server reads (LINEAR_ENDPOINT, BOARD_NO_ACCESS, …).",
+      "reason": "Reverted to the two named secretKeyRef entries, GITHUB_TOKEN optional."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Task review round 3: every 401 was reported as an expired login, including the server's own 401 while its Access keys aren't loaded.",
+      "reason": "Only an opaqueredirect is reported as an expired login; a 401 shows as '401 Unauthorized'."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Task review round 3: no automated test covers the expired-login path (crates/app/src/main.rs web fetch); Verify round 2 should observe it in a browser."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Build round 1: no test checks a token signed with a newly rotated key is accepted once the keys are reread; no test covers the native app sending the service-token headers."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
