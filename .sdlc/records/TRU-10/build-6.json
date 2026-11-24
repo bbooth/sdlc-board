@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-10",
+  "round": 6,
+  "result": "pass",
+  "recorded_at": "2026-11-24T06:24:37.827Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "c2282af"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-10-prs-gates-needs-you"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "32 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "6 test files changed with 10 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "735 lines changed, counting 397 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at c2282af"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "0 findings, none blocking and open"
+    }
+  ],
+  "findings": [],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
