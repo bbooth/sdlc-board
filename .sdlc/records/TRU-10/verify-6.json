@@ -1,0 +1,144 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-10",
+  "round": 6,
+  "result": "pass",
+  "recorded_at": "2026-11-24T06:43:19.993Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "c88a006",
+    "build_record": ".sdlc/records/TRU-10/build-6.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/build-6.json says pass at c2282af"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since c2282af"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at c88a006"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged c88a006"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-2, AC-3"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "15 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "8 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner passed: cargo test -p board-server --test needs_you specs_to_approve_green_prs_and_blocked_tickets_need_the_owner"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:a_failed_part_keeps_its_earlier_value_and_marks_the_source passed: cargo test -p board-server --test github a_failed_part_keeps_its_earlier_value_and_marks_the_source"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:without_a_token_reads_are_spaced_by_what_they_cost passed: cargo test -p board-server --test github without_a_token_reads_are_spaced_by_what_they_cost"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read passed: cargo test -p board-server --test github checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr passed: cargo test -p board-server --test github a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:an_unknown_check_state_reads_as_unknown passed: cargo test -p board-app --test board an_unknown_check_state_reads_as_unknown"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "3 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/board.rs:59: no test checks that a card's gate can come from its PR's branch records. I changed gates::latest(issue.gates.iter().chain(pr.and_then(|p| p.gate.as_ref()))) to gates::latest(issue.gates.iter()), and every board-server test still passed. Still open from Verify round 5. End to end it works: TRU-6 showed Adversarial review round 1 from its records once its comments were removed."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:109-125: without a token, the 45-request cap is spent in repo order, and every read asks again for check runs of every open PR. If the first repo has about 22 or more open tied PRs, later repos are never listed: in the run with 30 made-up PRs, bbooth/sdlc-board was 'not sent ... (no earlier PRs)'. The last open PRs also stay 'checks unknown' on every read. That only happens at a volume these repos don't have today (the real first read was 15 requests)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Verification environment: the egress proxy adds a GitHub credential to requests to api.github.com (a curl with no token got X-RateLimit-Limit 15000). The server's own requests carried no real token, but its upstream reads were authenticated by the proxy, so GitHub's real 60-an-hour anonymous limit and its 403s were not observed. No sdlc-board PR exists for TRU-10, so the green-PR merge item used real booking PR #53 served as open, and Stage labels were overridden through the Linear proxy. Everything else was real data."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-2 test crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner: PASS; FAILS with the Checks::Pass filter removed and with the !p.draft filter removed",
+    "AC-2 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS; FAILS with the Needs you block disabled",
+    "AC-2 test crates/server/tests/github.rs:a_failed_part_keeps_its_earlier_value_and_marks_the_source: PASS; FAILS with the same-commit match dropped from the before lookup, with Unknown replaced by Pending, with as_of replaced by now(), and with the kept read_at dropped",
+    "AC-2 test crates/server/tests/github.rs:without_a_token_reads_are_spaced_by_what_they_cost: PASS; FAILS with the per-read budget check removed and with the gate cache disabled",
+    "AC-2 e2e GET /v1/snapshot on board-server (real Linear and api.github.com through pass-through proxies, Stage labels overridden): needs_you = approve TRU-11 (Linear URL), merge TRU-7 -> https://github.com/bbooth/booking/pull/53, blocked TRU-12 (Linear URL); the TRU-13 PR with a pending check is not listed",
+    "AC-2 e2e GET /v1/snapshot after the checks read of #53 failed and then its head moved: same commit: checks pass kept, merge item kept, last_good = first read's time; new commit: checks 'unknown' and no merge item; after recovery: pass and the merge item is back, last_error null",
+    "AC-2 e2e tokenless board-server with 30 extra fabricated tied PRs: the first read sent exactly 45 requests to the proxy; last_error '25 reads failed, first: ... not sent, this read used its 45 requests (unknown)'",
+    "AC-2 e2e board-app (HEAD and main) under Xvfb against that server: HEAD: 'Needs you (3)' with Approve the spec / Merge / Blocked links above the columns; main's app parses the new snapshot (checks 'unknown') and draws the board",
+    "AC-3 test crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read: PASS; FAILS when in-progress runs are treated as completed and when Unknown is replaced by Pending",
+    "AC-3 test crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr: PASS; FAILS when gates::latest orders by round before stage; still PASSES when the card ignores the PR's branch gate (see finding)",
+    "AC-3 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS; FAILS with the top-level card's details(ui, t) call removed",
+    "AC-3 test crates/app/tests/board.rs:an_unknown_check_state_reads_as_unknown: PASS; FAILS with #[serde(other)] removed",
+    "AC-3 e2e GET /v1/snapshot, TRU-6 card against real bbooth/booking (TRU-6's Linear comments removed): gate {Adversarial review, 1, pass} from .sdlc/records/TRU-6 at merge 851cb275; pr #49 https://github.com/bbooth/booking/pull/49 merged=true",
+    "AC-3 e2e GET /v1/snapshot with the real Linear comments: TRU-6 gate {Rollout, 1, pass}; TRU-7 pr #53 checks=pass; TRU-13 pr #9013 checks=pending; TRU-14 pr #9129 checks=unknown",
+    "AC-3 e2e board-app under Xvfb: cards show 'Rollout round 1: pass' with 'PR #49 merged', 'PR #53 checks pass', 'PR #9013 checks pending', 'PR #9129 checks unknown', 'Adversarial review round 3: fail'"
+  ]
+}
