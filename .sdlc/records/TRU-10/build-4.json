@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-10",
+  "round": 4,
+  "result": "pass",
+  "recorded_at": "2026-11-24T05:08:44.545Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "fea2c92"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-10-prs-gates-needs-you"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "26 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "6 test files changed with 10 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "800 lines changed; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at fea2c92"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "6 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/server/src/github.rs:11 and crates/server/src/main.rs:20: a fixed 30-minute unauthenticated interval doesn't fit GitHub's 60-requests-an-hour limit when one read costs about 40 requests, yet the startup warning and STATUS.md say it stays within the limit.",
+      "reason": "GitHub counts the requests it sends; without a token interval() waits spent*3600/45 seconds after each read (retries included), and run() asks for the interval after every read. Tested in without_a_token_reads_are_spaced_by_what_they_cost."
+    },
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/server/src/github.rs:256-267 with sources.rs:117-122: a per-PR failure is swallowed and prs() returns Ok, so cards lose their gate and turn pending with last_error cleared.",
+      "reason": "A failed checks or records read keeps the PR's value from the last read, and the errors come back in PrRead.errors; the GitHub source reports them as Read.partial, which refresh() sets as last_error (shown by the app) and counts in board_source_read_errors_total. Tested in a_failed_part_keeps_its_earlier_value_and_marks_the_source."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/github.rs:78: a failed pulls list for one repo fails the read for every repo.",
+      "reason": "repo_prs errors are caught per repo; that repo keeps its last read's PRs and the error is reported. Covered by the LISTS_FAIL step of the same test."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/github.rs:81: the fork check compares full_name case-sensitively.",
+      "reason": "Now eq_ignore_ascii_case."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "No test checks that a GitHub source with no token reads on the unauthenticated interval.",
+      "reason": "without_a_token_reads_are_spaced_by_what_they_cost asserts the exact wait for the fake's 15 requests."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/board.rs:67: the open-before-merged tie-break in pr_for has no test.",
+      "reason": "an_open_pr_beats_a_merged_one_for_the_same_ticket in tests/needs_you.rs gives one ticket an open #1 and a newer merged #7 on its branch; the card shows #1."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
