@@ -52,7 +52,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      # Only main's head gets :latest, so a slow older run can't overwrite a newer one.
+      # :latest only if main's head builds the same image, so a slow older run can't
+      # overwrite a newer one, and Image Updater's write-back (no run of its own) doesn't count.
       - name: Decide tags
         id: tags
         if: github.ref == 'refs/heads/main'
@@ -60,7 +61,7 @@ jobs:
           repo="ghcr.io/${{ github.repository_owner }}/sdlc-board"
           tags="$repo:${{ github.sha }}"
           git fetch --quiet --depth=1 origin main
-          if [ "$(git rev-parse FETCH_HEAD)" = "${{ github.sha }}" ]; then
+          if git diff --quiet ${{ github.sha }} FETCH_HEAD -- . ':!deploy/.argocd-source-sdlc-board.yaml'; then
             tags="$tags,$repo:latest"
           else
             echo "::notice::main moved on; leaving :latest to that run."
@@ -77,6 +78,8 @@ jobs:
         with:
           context: .
           push: ${{ steps.tags.outputs.tags != '' }}
+          # The attestation changes the digest on every build, which would restart the pod for nothing.
+          provenance: false
           tags: ${{ steps.tags.outputs.tags || 'sdlc-board:ci' }}
           cache-from: type=gha,scope=board
           cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,mode=max,scope=board' || '' }}
