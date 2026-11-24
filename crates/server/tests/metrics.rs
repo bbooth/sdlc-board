@@ -1,5 +1,5 @@
 use axum::{body::Body, http::Request};
-use board_server::{board::Issue, routes, sources};
+use board_server::{routes, sources};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
@@ -9,9 +9,9 @@ impl sources::Source for Fake {
     fn name(&self) -> &'static str {
         self.0
     }
-    async fn read(&self) -> anyhow::Result<Vec<Issue>> {
+    async fn read(&self) -> anyhow::Result<sources::Read> {
         if self.1 {
-            Ok(vec![])
+            Ok(sources::Read::default())
         } else {
             anyhow::bail!("unreachable")
         }

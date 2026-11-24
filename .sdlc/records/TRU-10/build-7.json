@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-10",
+  "round": 7,
+  "result": "pass",
+  "recorded_at": "2026-11-24T06:58:20.108Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "120fddb"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-10-prs-gates-needs-you"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "35 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "6 test files changed with 10 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "747 lines changed, counting 405 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 120fddb"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "2 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/sources.rs:51-53: the new repo naming only reaches the partial path. When no repo's PR list could be read (repos_read == 0), the read still bails with \"no repo's PRs could be read, first: {first}\" and ignores read.repos_failed. Say two repos are configured and both /pulls reads fail. last_error in the snapshot then names only the first repo, while the commit message says the source's error names every such repo. The per-repo tracing::warn at github.rs:122 does log both, so the blocking finding from Adversarial review round 4 (no log, repo unnamed behind a PR error) is fixed. Only this snapshot detail is left: putting read.repos_failed.join(\", \") into the bail message would close it.",
+      "reason": "The bail message now names every failed repo."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/tests/github.rs:233-238: the new test checks only that last_error starts with \"PR lists failed for bbooth/gone; \". Nothing checks the new per-repo tracing::warn (github.rs:122), the change the round-4 finding asked for. The log could be removed and every test would still pass. The test also reads sources[0], which is the github source only because this State has never refreshed any other source. Finding the source by name, as status() does a few lines earlier, would keep the test from breaking if another source is refreshed first. I couldn't run the tests because the scratchpad volume is out of disk space, so I didn't check whether this test passes.",
+      "reason": "Partly fixed: the test now finds the source by name and passes. The log line itself is still untested."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}

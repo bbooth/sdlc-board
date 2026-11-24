@@ -1,0 +1,167 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-10",
+  "round": 4,
+  "result": "fail",
+  "recorded_at": "2026-11-24T06:47:00.241Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "a2ba0e5",
+    "verify_record": ".sdlc/records/TRU-10/verify-6.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/verify-6.json says pass at c88a006"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since c88a006"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at a2ba0e5"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read a2ba0e5"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, api, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "17 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "1 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "1 stand: [operability] crates/server/src/github.rs:121: when a repo's PR list read fails, the error is pushed into read.errors but never logged. The only warn in this file is the per-PR one in pr_info (line 165). crates/server/src/sources.rs:57 then exposes only the first error and a count (\"N reads failed, first: ...\"), and refresh logs only that string. Here is the sequence. Two repos are configured. A checks read for a PR in repo 1 fails, so its error is first in the list. Repo 2's /pulls GET then returns 404 (renamed, or the token lost access) or 5xx on every read. The logs show only the repo-1 PR warning, last_error shows only that same error, and board_source_read_errors_total counts the read as partial. Repo 2's outage is never named in a log or in the snapshot, and its PRs are served from the earlier cache (or are missing), with nothing to say which repo is broken. Each repo-level failure needs a tracing::warn with repo and error, like the per-PR path has."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/board.rs:66: pr_for ties a PR to a card by ticket ID alone. PrInfo has no repo, and the match never compares it with Issue.repo. Several repos can share one Linear team key (board.toml maps bbooth/booking to TRU, and this repo's own tickets are TRU too). So a PR in any onboarded repo whose branch or title (github.rs:159) names TRU-N lands on TRU-N's card, even when TRU-N belongs to another repo. It brings along the gate record read from that other repo's .sdlc/records/TRU-N. If the ticket is in PR review and the PR's checks are green, it also becomes the 'Merge: TRU-N' item in Needs you. Anyone who can push a branch to any onboarded repo can do this, and so can an honest typo. With a by_branch PR from the wrong repo, the right repo's title-only PR loses the max_by_key. Matching on repo as well as ticket would close it.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:86: gate results are parsed from every comment on a ticket, whoever wrote it. The query at linear.rs:14 fetches only `body`, and gates::latest picks the furthest stage. So anyone who can comment on the ticket can post `### Gate: Outcome (pass) · round 1`, and the card then shows that gate over the real records. That includes a workspace member, or an integration that copies outside text into Linear comments, such as GitHub issue sync on a public repo. Still open from earlier rounds. Fetching the comment's user or botActor and accepting only the pipeline's poster would close it.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:105: every GitHub response is read in full with `.json()`, with no size limit. That includes a gate record file fetched with the raw media type (github.rs:97), which can be any size up to GitHub's raw limit. Anyone who can push a branch with an open PR can commit a very large `.sdlc/records/TRU-N/outcome-1.json`. The server then buffers and parses it inside the 20 s timeout on each read of a new commit. Capping the body (for example with a check on content-length, or by reading in chunks up to a limit) would bound it.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/routes.rs:10: GET /v1/snapshot still serves with no check of Cloudflare Access's signed header, which docs/adr/0001 requires. This diff widens what it returns. With GITHUB_TOKEN set, it now includes PR titles, URLs, check states and gate results from any repo the token can read, private ones included, plus raw GitHub error strings in sources[].last_error. Anyone who reaches the pod or Service directly can read all of it. The gap was there before this diff, and nothing deploys yet.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/api/src/lib.rs:28: the meaning of two existing /v1 SourceStatus fields changes without a schema change. `last_good` used to be the time of the last successful read. It is now the oldest `read_at` of the data kept (sources.rs:131). `last_error` used to be null after any successful read, and is now set on a read that partly failed (sources.rs:132). A /v1 client built from main that reads `last_error != null` as 'the last read failed', or `generated_at - last_good` as 'time since a good read', now misreports a healthy-but-partial GitHub source. No client on main reads these fields (the app only starts drawing sources in this diff), so nothing breaks today. The `board_source_age_seconds` help text (metrics.rs:28) still says 'since the source's last good read', which no longer matches how the age is now computed.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:177: a merged PR goes out on /v1 as `\"checks\":\"pass\"` (always set to Checks::Pass), and only the separate `merged` flag (api lib.rs:75) says to ignore it. The bundled app checks `merged` first (app lib.rs:76), so the card is correct. But any other /v1 consumer that reads `checks` alone will show a merged PR's unread checks as passed. `Checks::Unknown`, or leaving `checks` out for merged PRs, would not claim a result nobody read.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/github.rs:121: when a repo's PR list read fails, the error is pushed into read.errors but never logged. The only warn in this file is the per-PR one in pr_info (line 165). crates/server/src/sources.rs:57 then exposes only the first error and a count (\"N reads failed, first: ...\"), and refresh logs only that string. Here is the sequence. Two repos are configured. A checks read for a PR in repo 1 fails, so its error is first in the list. Repo 2's /pulls GET then returns 404 (renamed, or the token lost access) or 5xx on every read. The logs show only the repo-1 PR warning, last_error shows only that same error, and board_source_read_errors_total counts the read as partial. Repo 2's outage is never named in a log or in the snapshot, and its PRs are served from the earlier cache (or are missing), with nothing to say which repo is broken. Each repo-level failure needs a tracing::warn with repo and error, like the per-PR path has.",
+      "status": "open",
+      "scope": "operability",
+      "reason": "At a2ba0e5 the Err arm in github.rs:119-122 only pushes to read.errors and does not log. The only tracing::warn in github.rs is the per-PR one at line 165. sources.rs:54 builds partial from read.errors.first() alone, and refresh (sources.rs:132) logs and stores only that string as last_error. Repo 1 is read first, so its PR checks error comes ahead of repo 2's /pulls error, which then shows up in no log and nowhere in the snapshot. The only time repo 2's error surfaces is when it happens to be first in the list, or when every repo fails and the read bails. The sequence the finding describes is reachable as written.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/main.rs:17: `std::env::var(\"GITHUB_TOKEN\").ok()` treats a set-but-empty GITHUB_TOKEN as a token. That happens with `GITHUB_TOKEN=` in a compose or env file, or with an optional secret key that is empty. The 'not set' warning is then skipped, github.rs:322 skips the per-read budget, interval() stays at 60 s, and every request carries `Authorization: Bearer ` (empty). Each read then fails with 401, or is sent with no budget against the 60/h unauthenticated limit. Filtering out empty values would make it take the tokenless path, which is safe.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:124: refresh retries a failed GitHub read at once, and GitHub::prs resets this_read at github.rs:110. So without a token, the retry gets a fresh 45-request budget and does not wait. This contradicts the 'One read never sends more' claim at github.rs:243 and in docs/STATUS.md. The cost is small today, because an Err needs every repo's list to fail, and that costs at most 2 requests per repo. But when it happens it is usually a rate-limited 403, and the immediate retry spends more of the exhausted limit.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:90: the github source gets an entry in snapshot.sources only after its first refresh finishes. That first read sends its requests one after another, with a 20 s timeout each, plus a retry. Meanwhile /healthz is always ok (routes.rs:12), so a new or restarted pod serves /v1/snapshot with no PRs, no gates from records and no 'merge' items in Needs you. The app (crates/app/src/lib.rs:8) warns only for sources that have a last_error, so nothing tells the owner that GitHub hasn't been read yet. It just looks as if nothing needs merging. This matters once a chart adds readiness or a canary.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/board.rs:66: pr_for ranks by_branch ahead of open. Take a ticket whose earlier PR came from a ticket-named branch and merged, and whose follow-up PR is open on a branch that doesn't name the ticket but has the ticket ID in its title. The card shows 'PR #<old> merged' instead of the open PR. The ticket also never gets a 'Merge' item in Needs you while that follow-up PR is green and in PR review.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:174: checks come only from the check-runs endpoint, which ignores the legacy commit status API. If a check is reported as a commit status (for example an external CI), a failing one is missed: the card says 'checks pass' and the ticket gets a 'Merge' item in Needs you. If every check is a status, there are no check runs, so the card says 'checks pending' forever. This is a doubt about which repos post statuses, not a confirmed case.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:14: only the first 50 comments are read for gate headers. On a ticket with more than 50 comments where the newest gate comments fall outside that page, the card shows an older gate's stage, round and pass/fail, and nothing says it is out of date. Tickets whose records are on a branch are covered by the PR read, but a Linear-only ticket such as a parent's Plan is not.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:16: only the 20 most recently updated closed PRs are read for merged ones. Once 20 newer PRs in a repo close, a ticket in Rollout or Outcome silently loses its PR link and the gate from its merge commit (often the latest one) from its card.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/board.rs:83: a 'Merge' item is titled with the PR title, which usually starts with the ticket ID, so Needs you reads 'Merge: TRU-6 TRU-6: fields' (the same doubling is in crates/app/tests/board.rs). The owner sees the ID twice and the ticket's own title not at all.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:17: the source warnings and the Needs you frame are drawn above the ScrollArea, outside it. With enough items and warnings on a short screen (the Android target), the strip can take the whole height: the columns get no room, and the items past the bottom of the screen can't be scrolled to.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:62: children() always adds an indented horizontal_wrapped row for details(), even when a sub-ticket has no gate and no PR. Every such sub-ticket leaves a blank, item-spaced line inside the 160px card, which stretches cards that have many sub-tickets.",
+      "status": "open",
+      "scope": "web"
+    }
+  ],
+  "decision": "Back to Build: fix what stands, then Build, Verify and review again",
+  "evidence": []
+}

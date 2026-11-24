@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-10",
+  "round": 7,
+  "result": "pass",
+  "recorded_at": "2026-11-24T07:05:52.887Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "b9d596c",
+    "build_record": ".sdlc/records/TRU-10/build-7.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/build-7.json says pass at 120fddb"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 120fddb"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at b9d596c"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged b9d596c"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-2, AC-3"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "12 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "6 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner passed: cargo test -p board-server --test needs_you specs_to_approve_green_prs_and_blocked_tickets_need_the_owner"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:a_failed_part_keeps_its_earlier_value_and_marks_the_source passed: cargo test -p board-server --test github a_failed_part_keeps_its_earlier_value_and_marks_the_source"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr passed: cargo test -p board-server --test github a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read passed: cargo test -p board-server --test github checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board needs_you_is_listed_first_and_cards_show_their_gate_and_pr"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "4 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/sources.rs:52: no test checks the repo names added to the 'no repo's PRs could be read (...)' error in 120fddb. With them removed, a_failed_part_keeps_its_earlier_value_and_marks_the_source still passes, because it only checks starts_with(\"no repo's PRs could be read\"). End to end the names were present: '(bbooth/booking, bbooth/sdlc-board)'."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:124-127: after a failed list read, an empty Vec is stored as the repo's 'last' PRs. The retry then says 'kept its PRs from an earlier read', although none were ever read. Observed on a fresh server with both lists failing: the first attempt's error said 'no earlier PRs', and the retry a millisecond later said '(kept its PRs from an earlier read)'."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/main.rs:17: no test covers treating an empty GITHUB_TOKEN as unset. End to end it works: with GITHUB_TOKEN='', the warning was logged and every request reached the proxy with no Authorization header."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Verification environment: the egress proxy authenticates api.github.com reads (curl with no token: X-RateLimit-Limit 15000), so GitHub's real 60-an-hour anonymous limit was not observed. The server sent no token. The merge item used real booking PR #53 served as open, because no sdlc-board PR exists for TRU-10. Stage labels were overridden through the Linear proxy."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-2 test crates/server/tests/needs_you.rs:specs_to_approve_green_prs_and_blocked_tickets_need_the_owner: PASS; FAILS with the Checks::Pass filter removed from board.rs:82",
+    "AC-2 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS; FAILS with the Needs you block disabled (lib.rs:17)",
+    "AC-2 test crates/server/tests/github.rs:a_failed_part_keeps_its_earlier_value_and_marks_the_source: PASS; FAILS without read.repos_failed.push and without the 'PR lists failed for' prefix; still PASSES with the names removed from the all-failed bail message",
+    "AC-2 e2e GET /v1/snapshot on board-server (real Linear and api.github.com through pass-through proxies, Stage labels overridden, GITHUB_TOKEN=''): needs_you = approve TRU-11, merge TRU-7 -> https://github.com/bbooth/booking/pull/53, blocked TRU-12; pending TRU-13 PR not listed; empty token treated as unset (warn logged, every request auth=no)",
+    "AC-2 e2e GET /v1/snapshot with the bbooth/sdlc-board PR list and PR #9013's reads failing: last_error 'PR lists failed for bbooth/sdlc-board; 3 reads failed, first: PR #9013 checks: ...'; a warn line per failed repo; with both lists failing: 'no repo's PRs could be read (bbooth/booking, bbooth/sdlc-board), first: ...'",
+    "AC-2 browser board-app (HEAD) under Xvfb against that server: 'Needs you (3)' with Approve the spec TRU-11 / Merge TRU-7 / Blocked TRU-12 links above the columns",
+    "AC-3 test crates/server/tests/github.rs:a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr: PASS; FAILS when gates::latest orders by (round, stage)",
+    "AC-3 test crates/server/tests/github.rs:checks_map_to_pass_fail_or_pending_and_the_latest_record_is_read: PASS",
+    "AC-3 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS; FAILS with the card's details(ui, t) call removed (lib.rs:45)",
+    "AC-3 e2e GET /v1/snapshot, TRU-6 card against real bbooth/booking (TRU-6's Linear comments removed): gate {Adversarial review, 1, pass} from .sdlc/records/TRU-6?ref=851cb275...; pr #49 https://github.com/bbooth/booking/pull/49 merged=true",
+    "AC-3 e2e GET /v1/snapshot with the real Linear comments: TRU-6 gate {Rollout,1,pass}; TRU-7 pr #53 checks=pass; TRU-13 pr #9013 checks=pending (unknown when its check read fails); TRU-10 gate {Adversarial review,4,fail}",
+    "AC-3 browser board-app under Xvfb: cards show 'Rollout round 1: pass' + 'PR #49 merged', 'PR #53 checks pass', 'PR #9013 checks pending', 'Adversarial review round 4: fail'"
+  ]
+}

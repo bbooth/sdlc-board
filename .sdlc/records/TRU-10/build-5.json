@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-10",
+  "round": 5,
+  "result": "pass",
+  "recorded_at": "2026-11-24T06:00:40.364Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "f0c50f4"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-10-prs-gates-needs-you"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "29 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "6 test files changed with 10 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "664 lines changed, counting 351 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at f0c50f4"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "1 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "/home/user/sdlc-board/crates/server/src/sources.rs:49: the new bail only fires when repos_read is 0, so a read is still Ok, and last_good and board_source_age_seconds{source=\"github\"} still move forward, whenever at least one PR list call succeeds. Two cases are affected. (1) With several repos configured, a repo whose list fails every read (for example bbooth/gone 404ing after this change) keeps its cards on old data for hours, yet the source reports data 0 min old. (2) A read where both list calls succeed and every check-runs and records call then fails (for example GitHub's secondary rate limit hitting mid-read, or the PARTS_FAIL mode in crates/server/tests/github.rs) is also counted as fresh. In both cases last_error carries the 'parts kept from earlier reads' text, so the failure is visible, but the age is not. This fixes the confirmed blocking case from adversarial_review-2 (every list fails). If the age is meant to show partial staleness too, track the oldest kept part per repo."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}

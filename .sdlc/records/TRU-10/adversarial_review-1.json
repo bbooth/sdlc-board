@@ -1,0 +1,169 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-10",
+  "round": 1,
+  "result": "fail",
+  "recorded_at": "2026-11-24T04:58:05.371Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "c9507db",
+    "verify_record": ".sdlc/records/TRU-10/verify-3.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/verify-3.json says pass at 252b13f"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 252b13f"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at c9507db"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read c9507db"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, api, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "16 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "5 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "5 stand: [security] crates/server/src/github.rs:61: any GitHub user can tie a fork PR to a pipeline ticket. bbooth/booking is public, and the code never compares head.repo.full_name with the repo. So an outsider who opens a PR from a fork with head ref `feat/tru-10-x`, or a title containing `TRU-10`, has it tied to TRU-10. Then pr_for (crates/server/src/board.rs:66) picks the highest number with by_branch, so the outsider's PR replaces the real pipeline PR on the card: its number, link and checks state. If its check-runs come back all completed and successful, board.rs:82-83 lists it in \"Needs you\" as \"Merge\", linking to the outsider's PR. The owner signs off on merges from that list. PRs whose head repo is not the configured repo should be skipped, or at least never chosen over a same-repo PR or put in Needs you.; [operability] crates/server/src/main.rs:16: when GITHUB_TOKEN is unset, the server quietly starts the GitHub source unauthenticated and logs nothing about it. Each 60s read makes 1 request per repo plus 2-3 per tied PR (verify-3 measured 8 per read, about 480 an hour). The 60-an-hour limit therefore runs out in about 7 minutes, not 'within the hour' as docs/STATUS.md say"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/github.rs:61: any GitHub user can tie a fork PR to a pipeline ticket. bbooth/booking is public, and the code never compares head.repo.full_name with the repo. So an outsider who opens a PR from a fork with head ref `feat/tru-10-x`, or a title containing `TRU-10`, has it tied to TRU-10. Then pr_for (crates/server/src/board.rs:66) picks the highest number with by_branch, so the outsider's PR replaces the real pipeline PR on the card: its number, link and checks state. If its check-runs come back all completed and successful, board.rs:82-83 lists it in \"Needs you\" as \"Merge\", linking to the outsider's PR. The owner signs off on merges from that list. PRs whose head repo is not the configured repo should be skipped, or at least never chosen over a same-repo PR or put in Needs you.",
+      "status": "open",
+      "scope": "security",
+      "reason": "github.rs prs() (lines 57-71) reads only head.ref, head.sha, title, number and draft, and never checks head.repo against repo.name. So a fork PR whose branch names the ticket gets by_branch=true. pr_for (board.rs, max_by_key((by_branch, number))) then prefers it over an older same-repo PR, and needs_you lists it as 'merge' when its checks are Pass and the ticket is in PR review. If Actions on a first-time fork PR wait for approval, its checks may stay pending, which narrows the Needs-you part. The card takeover does not depend on checks.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:79: the gate record is read from the base repo at `ref=<head.ref>`. For a fork PR, the branch name is chosen by the PR author, so the card can show records from whatever base-repo ref that name resolves to, not from the PR's own commit. Reading at head.sha, together with the same-repo filter above, ties the gate to the PR it is shown with.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:55-66: each open PR that names a ticket costs 2-3 more API calls per 60-second refresh, and outsiders can open as many PRs as they like. A burst of such PRs on the public repo can use up the token's rate limit. After that every read fails, and the GitHub data on the board stays at the last good read.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/api/src/lib.rs:75: `Checks` is a closed serde enum inside every `Ticket.pr`. Suppose a later server adds a state, for example `none` for a PR with no check runs, or `neutral` (the verify record's open minor already points at that case). An app built from this commit then fails to deserialize the whole `/v1/snapshot` and draws no board at all, not just that card. The new comment in the API covers only one direction (\"an app can read an older server\"). An `#[serde(other)]` Unknown variant, or a string like `NeedsYou.kind`, would keep older apps reading newer servers.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:17: the Needs-you strip maps every `kind` other than `approve` and `merge` to \"Blocked\" (`_ => \"Blocked\"`). If a later server adds a kind, for example a rollout waiting on the owner, this app shows it to the owner as \"Blocked: <id>\". Matching `blocked` explicitly and showing unknown kinds by their raw name would avoid that.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/main.rs:16: when GITHUB_TOKEN is unset, the server quietly starts the GitHub source unauthenticated and logs nothing about it. Each 60s read makes 1 request per repo plus 2-3 per tied PR (verify-3 measured 8 per read, about 480 an hour). The 60-an-hour limit therefore runs out in about 7 minutes, not 'within the hour' as docs/STATUS.md says. After that every read returns 403, and the immediate retry in sources::refresh repeats it uselessly. PRs and 'merge' items freeze at their last good state until the hourly reset, then break again a few minutes later. The app draws no source status (crates/app/src has no last_error or staleness display), so the owner sees a plausible but stale Needs-you list. Either refuse to start the source without a token, or log a warning at startup and slow the interval to fit the limit.",
+      "status": "open",
+      "scope": "operability",
+      "reason": "main.rs:18 passes std::env::var(\"GITHUB_TOKEN\").ok() with no warning, and INTERVAL is a fixed 60s (sources.rs). verify-3 measured 8 requests per read against a 60-an-hour limit. That limit runs out in minutes, not 'within the hour' as docs/STATUS.md says. The 'logs nothing' part is smaller than claimed: refresh() logs a warn with the error on every failed read, but nothing at startup. The plan's rate-limit risk ('far under both') assumed an authenticated GraphQL query per repo, not this unauthenticated REST fan-out.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/github.rs:63: every sub-request in prs() uses `?`: the check-runs call (63), the record lookup (64, 79, 84) and the JSON decode (49). So one bad response for one PR fails the whole GitHub read for every configured repo. Examples: a record file on any open PR's branch that isn't valid JSON, or a single 5xx or secondary-rate-limit 403 on one contents call. With a malformed record committed, every refresh fails until that PR closes, and all PRs and merge items across all repos stay stale (or are empty from startup). The error string is the only signal. Skip and log a failing PR (or repo) instead of aborting the read.",
+      "status": "open",
+      "scope": "operability",
+      "reason": "get() (github.rs:45-49) turns any non-404 error status, or a body that fails to decode as JSON, into Err. The check-runs call (:63), record() (:64) and both of record()'s own calls (:79, :84) all propagate it with `?`. So one bad PR fails prs() for every repo. refresh() then keeps the previous read, which is empty from startup, and sets only last_error. A malformed record file fails every read for as long as that PR stays open.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:84: if the record file listed in the directory then returns 404 (for example, the branch was force-pushed between the two calls), `.unwrap_or_default()` turns it into Null and the card shows that gate as 'fail' instead of skipping it. A record missing `result` is shown as a fail the same way, and nothing is logged.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:63: check-runs are read with per_page=100 and no pagination. A head commit with more than 100 runs and a failure on page 2 maps to Pass, and needs_you then lists the PR as ready to merge. Commit statuses aren't read either, so a PR checked only by statuses stays 'pending' forever (verify-3 also notes this).",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:64: the record lookup uses head.ref against the base repo. For a PR from a fork, that reads the base repo's branch of the same name (wrong records) or gets 404, without any sign that the PR came from a fork.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:14: `comments(first: 50)` has no ordering or paging. On a ticket with more than 50 comments, gate headers posted after the first 50 may be dropped, so the card shows an older gate. Nothing logs that comments were truncated.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/github.rs:56: only `state=open` PRs are listed, and gate records are read only from an open PR's head branch (record() at :77). So once a pipeline PR merges, its ticket moves to Rollout or Outcome and its card drops both the PR link and the branch's gate records, at the point where the owner is following the rollout. The ticket's own end-to-end check ('against bbooth/booking, a merged pipeline PR and TRU-6's records show on its card') is not met by this code. Verify round 3 only got 'PR #49 checks pass' on TRU-6's card by having a proxy serve the merged PRs #42-#59 as open. Against the real API, TRU-6 (PR #49 merged) shows no PR, and none of its record files on the branch are read.",
+      "status": "open",
+      "scope": "web",
+      "reason": "github.rs:56 queries pulls with state=open only, and gate records are read only for PRs in that list. The plan (plan.md:11) specifies 'open and recently merged PRs', and the ticket's end-to-end check requires a merged PR on its card. The verify-3 record (.sdlc/records/TRU-10/verify-3.json, evidence lines 126 and 132) says the proxy served the closed PRs #42-#59 as open to get TRU-6's PR and records onto the card.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/github.rs:49 and crates/app/src/main.rs (CentralPanel): if any GitHub request fails, the whole GitHub read fails. That includes a 403 from the rate limit, or a 5xx on one PR's check-runs or contents call in any repo. The server then keeps the last good PRs and sets only sources[].last_error, and the app never draws `snap.sources`. Sequence: run without GITHUB_TOKEN, which STATUS.md presents as an option. One read costs 1 + 2-3 requests per PR every 60s, so the 60-an-hour limit runs out in minutes and every later read returns 403. From then on the checks on every card stay frozen. A PR that later goes green never appears as a 'Merge' item in Needs you, and a pending one keeps saying 'checks pending'. Nothing on screen says the GitHub data is stale or failing.",
+      "status": "open",
+      "scope": "web",
+      "reason": "Nothing in crates/app/src reads `sources` (grep finds no match). board() in crates/app/src/lib.rs draws needs_you and the columns only. Together with get() failing the whole read and refresh() keeping the earlier data, frozen checks and missing merge items are real with nothing on screen to show it. The per-source stale marker is planned for T-3 (plan.md:40, AC-7), so in the plan this gap is meant to be temporary, but the behaviour is real on this branch.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:9: the 'Needs you' group is drawn outside the ScrollArea and has no height limit. With many items across onboarded repos (approvals plus blocked plus merges) on the default 700px-tall window, the list takes up the CentralPanel and the stage columns get little or no room, with no way to scroll the list itself.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/board.rs:83 with crates/app/src/lib.rs:18: a merge item's title is the PR title, and pipeline PR titles start with the ticket ID. So the row reads 'Merge: TRU-6 TRU-6: Stop using the fields', with the ID twice. The app test in the diff expects exactly this ('Merge: TRU-6 TRU-6: fields').",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:71: a draft PR's card says only 'PR #N checks pass'. needs_you leaves green drafts out (board.rs `!p.draft`), so the owner sees a green PR on a PR review card with no Merge item and no sign of why. Separately, github.rs `checks()` reads only check-runs, not commit statuses, so a repo whose CI reports through the status API, or that has no CI, shows 'checks pending' forever and never reaches Needs you.",
+      "status": "open",
+      "scope": "web"
+    }
+  ],
+  "decision": "Back to Build: fix what stands, then Build, Verify and review again",
+  "evidence": []
+}

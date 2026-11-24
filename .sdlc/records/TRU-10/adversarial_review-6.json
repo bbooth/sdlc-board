@@ -1,0 +1,153 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-10",
+  "round": 6,
+  "result": "pass",
+  "recorded_at": "2026-11-24T14:32:32.311Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "b824660",
+    "verify_record": ".sdlc/records/TRU-10/verify-8.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/verify-8.json says pass at 096e86b"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 096e86b"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at b824660"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read b824660"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, api, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "15 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "0 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "0 blocking findings refuted, 15 minor carried to the PR"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/linear.rs:15: the gate on a card can be spoofed by anyone who can comment on the ticket. The query fetches comment `body` and `createdAt` but not who wrote the comment. crates/server/src/gates.rs:48 (from_comment) accepts any `### Gate: <known stage> (pass) · round N` line, and gates::latest now ranks by time first. So the newest such comment always wins, whoever posted it. That includes a workspace member, or an integration that syncs outside comments into Linear. A comment like `### Gate: Outcome (pass) · round 1` replaces the card's real gate (for example a failing Verify) until a later record or comment. The Needs you list does not read gates, so the harm is limited to what the card shows. Possible fix: read the comment's author (or `botActor`) and accept gate headers only from the pipeline's identity.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:107: every GitHub response is read in full with `.json()` and no size cap. This includes gate record files under `.sdlc/records/<ticket>/` at a PR's head, which come back in full through the raw media type. Anyone with push access can open a same-repo PR whose highest-round record file is very large, and the server buffers all of it on every read until that commit has been read once. Fork PRs are now filtered out (github.rs:476), so only collaborators can do this. Possible fix: check Content-Length, or read the body in chunks up to a small limit.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/routes.rs:10: GET /v1/snapshot still answers with no check of Cloudflare Access's signed header. docs/adr/0001-snapshot-server-and-egui-app.md:15-17 says the server checks that header itself, 'so a request that skips Access gets nothing'. This diff widens what the route returns. With GITHUB_TOKEN set (main.rs:17), it now includes PR titles, URLs, check states and gate results from each configured repo, private ones included. It also includes raw GitHub error strings in sources[].last_error, which name repo paths. Anyone who can reach the server's port reads all of it. There is no deploy/ yet, so nothing is exposed today, but this has to land before the server is reachable from outside the cluster.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/metrics.rs:28: board_source_age_seconds is still described as \"Seconds since the source's last good read\", but it is computed from last_good (crates/server/src/sources.rs:111), and sources.rs:134 now sets last_good to the oldest kept PR's read_at. So after a successful github read that kept an old checks value, the gauge reports the age of that oldest data, not the time since the read. Separately, board_source_read_errors_total now also counts partial reads (sources.rs:128). Anyone scraping /metrics who goes by the help text, such as an alert on read age, gets a different meaning than before. The help text change for the errors counter covers that one, but the age gauge's help text was not updated.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:120: when a GitHub read fails, refresh() retries it straight away, and GitHub::prs (crates/server/src/github.rs:112) resets this_read to 0 first. So the retry gets a new 45-request budget and doesn't wait for the interval. read() only fails when every repo's PR list failed, which without a token is usually a rate-limit 403. The retry then spends more of a limit that is already used up, which goes against 'one read never sends more' (github.rs:13) and docs/STATUS.md.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:103-107: a non-2xx response becomes reqwest's bare 'HTTP status client error (403 Forbidden)'. Nothing reads x-ratelimit-remaining, x-ratelimit-reset or Retry-After. Without a token, the budget counters (github.rs:57-58) live in memory. A pod restart, or two pods during a rollout, can go over GitHub's 60 requests an hour per IP. Every list then returns 403, and last_error and the logs can't tell a rate limit from a token or permission problem. interval() (github.rs:87) also falls back to 60 s, because the failed reads spent only about 2 requests, so the server keeps polling into the limit every minute instead of waiting for the reset time.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:93 with :113: the 45-request cap without a token covers the whole read, and repos are read in board.toml order, open PRs first and then up to 20 merged PRs, each needing 1 directory read plus 1 file per stage the first time. After a start, the first repo's merged-PR record reads use up the budget. A second onboarded repo then gets 'not sent, this read used its 45 requests' on its PR list ('no earlier PRs'), so its open PRs and 'merge' items are missing. A read that spends 45 requests also sets the next interval to 3600 s (github.rs:87), so this lasts several hours, not 'a few reads' as docs/STATUS.md:21 says. Only one repo is configured today.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:93: the github source gets no entry in snapshot.sources, and no board_source_age_seconds series, until its first refresh finishes. That refresh is a chain of sequential requests, each with a 20 s timeout (github.rs:70), plus a retry, and /healthz always answers ok (crates/server/src/routes.rs:12). A new pod therefore serves snapshots with no PRs, no gates from record files and no 'merge' items in Needs you, and neither the app nor the metrics show that GitHub hasn't been read yet. This matters once a chart adds readiness or a canary.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:110-133: a read has no overall deadline, and with a token it has no cap on requests. If GitHub hangs, each sequential call (2 per repo, plus 1 per open PR, plus up to 10 per new commit's records) waits the full 20 s, and the retry in sources.rs:124 doubles the total. One refresh can then run for many minutes while the snapshot quietly serves old data. The duration histogram tops out at 40 s (metrics.rs:22), so how long these reads take can't be seen.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:187-193: after a push changes `at`, `before` is None. If the gate-record read for the new commit fails (for example the budget runs out mid-read), gate is None, and the card drops the gate it showed for the previous commit. It falls back to Linear comments or shows nothing. The only sign is the source's partial error. The checks path at github.rs:180-183 keeps an earlier value or shows Unknown; this path doesn't.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/metrics.rs:28: the board_source_age_seconds help text still says 'Seconds since the source's last good read', but last_good is now the oldest read_at of the data kept (sources.rs:135). A healthy github source whose checks read keeps failing for one commit shows a growing age, and the alert describes the wrong cause. board_source_read_errors_total (metrics.rs:25, sources.rs:128) now also counts partial reads. Without a token, a read that hits the 45-request cap is partial every time, so the error rate sits at 100% and can't be told apart from an outage.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:236: checks() works from a list of failing conclusions and treats every other completed run as a pass. A run that ends `stale` (GitHub sets this on a run left incomplete), or `startup_failure` or any conclusion GitHub adds later, reads as \"checks pass\" on the card. The PR then shows up in Needs you as \"Merge\" even though its checks didn't pass. Listing the passing conclusions (success, neutral, skipped) and treating anything else as a failure or Unknown would keep a non-green PR off the merge list.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/board.rs:66: pr_for prefers a PR whose branch names the ticket over an open one, even when that branch PR is already merged. Example: TRU-n's pipeline-branch PR was merged, and a follow-up PR titled \"TRU-n: ...\" is open from a branch that doesn't name the ticket. The card shows \"PR #old merged\" and hides the open PR. needs_you (board.rs:82) then drops the merged one, so the green follow-up never appears as \"Merge\" while the ticket is in PR review.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/board.rs:82: a \"merge\" item only needs checks Pass, not draft and not merged. It doesn't look at GitHub's mergeable state or the review decision. A green PR with merge conflicts is listed as \"Merge: ...\", but when the owner opens it, GitHub won't merge it.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/lib.rs:18: the source errors and the Needs you frame are drawn above, and outside, the ScrollArea at line 32. They grow with no limit, so a long Needs you list or many failed sources push the columns down and squeeze them into what's left of the window. Separately, crates/app/src/main.rs only fetches at start and when Refresh is clicked. After the owner merges or approves, the item stays in Needs you until a manual refresh, so the to-do list goes stale after the very action it asks for.",
+      "status": "open",
+      "scope": "web"
+    }
+  ],
+  "decision": "Open the PR and advance to PR review",
+  "evidence": []
+}

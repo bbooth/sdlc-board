@@ -1,5 +1,5 @@
-use crate::board::Issue;
 use crate::config::Repo;
+use crate::{board::Issue, gates};
 use serde_json::{json, Value};
 use std::time::Duration;
 
@@ -8,10 +8,11 @@ const STAGE_GROUP: &str = "Stage";
 // A project with more open tickets than this is beyond a one-person board.
 const MAX_PAGES: usize = 10;
 
+// Linear lists comments newest first, so a ticket's latest gate is in the first 50.
 const QUERY: &str = r#"query Board($team: String!, $project: String!, $after: String) {
   issues(first: 100, after: $after, filter: {team: {key: {eq: $team}}, project: {name: {eq: $project}}, state: {type: {nin: ["completed", "canceled"]}}}) {
     pageInfo { hasNextPage endCursor }
-    nodes { identifier title url state { type } parent { identifier } labels { nodes { name parent { name } } } }
+    nodes { identifier title url state { type } parent { identifier } labels { nodes { name parent { name } } } comments(first: 50, orderBy: createdAt) { nodes { body createdAt } } }
   }
 }"#;
 
@@ -78,6 +79,13 @@ pub fn parse_page(body: &str, repo: &str) -> anyhow::Result<Page> {
                 stage: labels.iter().find(|l| l["parent"]["name"] == STAGE_GROUP).and_then(|l| text(&l["name"])),
                 parent: text(&n["parent"]["identifier"]),
                 open: !matches!(n["state"]["type"].as_str(), Some("completed" | "canceled")),
+                gates: n["comments"]["nodes"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|c| Some(gates::from_comment(c["body"].as_str()?, c["createdAt"].as_str())))
+                    .flatten()
+                    .collect(),
             })
         })
         .collect::<anyhow::Result<_>>()?;

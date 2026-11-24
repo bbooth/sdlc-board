@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-10",
+  "round": 5,
+  "result": "fail",
+  "recorded_at": "2026-11-24T07:10:14.744Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "c9e5cff",
+    "verify_record": ".sdlc/records/TRU-10/verify-7.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-10/verify-7.json says pass at b9d596c"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since b9d596c"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at c9e5cff"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read c9e5cff"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, api, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "9 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "1 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "1 stand: [web] crates/server/src/gates.rs:27 (used at crates/server/src/board.rs:59): latest() picks the furthest stage and only then the highest round. So once a ticket loops back after a failed gate, its card keeps showing that failure. This branch shows it: .sdlc/records/TRU-10/ holds adversarial_review-4.json (fail), and after it come build-5..7 and verify-5..7, with verify-7 passing. TRU-10's card reads 'Adversarial review round 4: fail' while the ticket is back in Build/Verify and has passed since. The owner's rejections (approve.mjs posts them as comments titled '<Stage> approval') make it worse because they rank above the gates that follow them. Take 'PR review approval (fail) · round 1' (order 13), which sends the ticket back to Build. It outranks every later Build, Verify and Adversarial review record (orders 6, 8 and 10), so the card shows that rejection until the next PR review approval. The same goes for 'Spec approval (fail) · round 1' (order 3) over the revised 'Spec (pass) · round 2' (order 2). The ticket then sits in Ready for approval and in Needs you as 'Approve the spec', but its card says the spec approval failed. The ticket does say 'chosen by stage order then"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/gates.rs:294: from_comment accepts a `### Gate: <stage> (pass) · round N` line from any comment on the ticket, and crates/server/src/linear.rs:588 never checks who wrote it. Anyone who can comment on the Linear ticket, or anything that syncs comments into Linear, can post `### Gate: Outcome (pass) · round 99`. Because `latest` picks by stage order then round (crates/server/src/board.rs:222), that line beats the real records from the PR's branch, and the card shows a passing Outcome gate that never ran. It doesn't feed the \"Needs you\" list. It is minor because who can comment in this workspace isn't stated anywhere.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:415: get() reads every GitHub response in full with `.json()` and no size cap. With the raw media type, record() at github.rs:518 downloads the whole file of the newest-named record (say `outcome-9.json`) under `.sdlc/records/<ticket>/` at the PR's head. Anyone who can push a branch to an onboarded repo can commit a file of many MB there, and the server buffers and parses it once per commit. Only someone with push access can do this, and the 20 s client timeout limits it, so it is minor.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:176: a merged PR goes into /v1/snapshot as `checks: \"pass\"` without its checks ever being read, and the only thing telling a reader to ignore it is the `merged` flag (crates/api/src/lib.rs:74 says checks are \"meaningless once merged\"). Today's app checks `merged` first, so nothing goes wrong now. But a client that reads `pr.checks` without `merged`, or a later server that drops `merged` (it is `#[serde(default)]`, so a missing value reads as false), would show a merged PR as green with passing checks. Sending `Unknown` for merged PRs, or making `merged` required, would close this.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:120: refresh retries a failed GitHub read straight away, and GitHub::prs (crates/server/src/github.rs:345) resets this_read to 0. So the retry gets a fresh 45-request budget and skips the interval wait. A read only returns Err when every repo's PR list failed. Without a token that is usually a rate-limited 403, and the retry then spends more of an already exhausted limit, one or two requests per repo. This goes against 'one read never sends more' (github.rs:245) and docs/STATUS.md. It is cheap today (at most 2 requests a repo), so minor.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:340: a non-2xx response becomes reqwest's bare 'HTTP status client error (403 Forbidden) for url'. Nothing reads x-ratelimit-remaining, x-ratelimit-reset or Retry-After. Without a token, two reads of 45 in one hour go over GitHub's 60 per IP. That happens after a pod restart (the counters at github.rs:290-291 live in memory) or with two pods during a rollout. Every list then fails with 403, and the logs and last_error can't tell a rate limit from a token or permission problem. interval() also falls back to 60 s, because the failed reads spent only about 2 requests, so the board polls into the limit every minute instead of waiting for the reset time GitHub sent.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:94: the github source has no entry in snapshot.sources, and no board_source_age_seconds series (crates/server/src/metrics.rs:49), until its first refresh finishes. That refresh is a chain of sequential requests, each with a 20 s timeout, plus a retry. /healthz is always ok (crates/server/src/routes.rs:12). So a new pod serves snapshots with no PRs, no record gates and no 'merge' items in Needs you, and neither the app nor metrics show that GitHub hasn't been read yet. This matters once a chart adds readiness or a canary.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:420: when a new push changes `at`, `before` is None, so a failed gate-record read for the new commit gives gate None. The card then drops the gate it showed for the previous commit and falls back to Linear comments or nothing. The failure is only in the source's partial error. Unlike the checks path at github.rs:414-416, no earlier value is kept and the PR isn't marked as unknown.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/metrics.rs:28: the board_source_age_seconds help text still says 'Seconds since the source's last good read'. The age now comes from last_good = the oldest read_at of the data kept (sources.rs:131). A healthy github source whose PR checks read keeps failing for the same commit therefore shows a growing age, and the alert text describes the wrong cause. board_source_read_errors_total (metrics.rs:556) now also counts partial reads. Without a token, a read that hits the 45-request cap is partial every time, so the error rate sits at 100% and can't be told apart from an outage.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/gates.rs:27 (used at crates/server/src/board.rs:59): latest() picks the furthest stage and only then the highest round. So once a ticket loops back after a failed gate, its card keeps showing that failure. This branch shows it: .sdlc/records/TRU-10/ holds adversarial_review-4.json (fail), and after it come build-5..7 and verify-5..7, with verify-7 passing. TRU-10's card reads 'Adversarial review round 4: fail' while the ticket is back in Build/Verify and has passed since. The owner's rejections (approve.mjs posts them as comments titled '<Stage> approval') make it worse because they rank above the gates that follow them. Take 'PR review approval (fail) · round 1' (order 13), which sends the ticket back to Build. It outranks every later Build, Verify and Adversarial review record (orders 6, 8 and 10), so the card shows that rejection until the next PR review approval. The same goes for 'Spec approval (fail) · round 1' (order 3) over the revised 'Spec (pass) · round 2' (order 2). The ticket then sits in Ready for approval and in Needs you as 'Approve the spec', but its card says the spec approval failed. The ticket does say 'chosen by stage order then round', but AC-3 asks for the latest gate, and in every rejection loop this rule shows a stale failure. A fix is to order by recorded_at, which every record carries, or else rank by stage only among gates after the last failure.",
+      "status": "open",
+      "scope": "web",
+      "reason": "The behaviour is real. gates.rs:27 does max_by_key((order(stage), round)), and github.rs:208 uses the same key for record files. order() ranks Adversarial review (10) above Verify (8), so on this branch adversarial_review-4 (fail, recorded_at 2026-11-24T06:47) wins over verify-7 (pass, 07:05). An 'X approval' fail also outranks the earlier-stage gates that come after it. The ticket's Tests line does say 'stage order then round', so the code follows the literal rule. But that line only describes what the test checks, and AC-3 asks for the latest gate. With the rule as written, a loop-back ticket shows a stale gate rather than the latest one. Nothing in the code or tests stops it, so it stands. One caveat: the fault is partly in how the ticket was specified, not only in the implementation.",
+      "judged": "confirmed"
+    }
+  ],
+  "decision": "Back to Build: fix what stands, then Build, Verify and review again",
+  "evidence": []
+}

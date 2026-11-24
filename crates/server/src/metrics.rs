@@ -22,7 +22,8 @@ impl Default for Metrics {
         let b = vec![0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 40.0];
         Self {
             reads: counter!("board_source_reads_total", "Reads of each source.", s, r).unwrap(),
-            errors: counter!("board_source_read_errors_total", "Reads of each source that failed.", s, r).unwrap(),
+            errors: counter!("board_source_read_errors_total", "Reads that failed, in whole or in part.", s, r)
+                .unwrap(),
             duration: histogram!("board_source_read_duration_seconds", "Read time, retry included.", s, b, r).unwrap(),
             age: gauge!("board_source_age_seconds", "Seconds since the source's last good read.", s, r).unwrap(),
             requests: counter!("board_http_requests_total", "HTTP requests.", &["route", "status"], r).unwrap(),

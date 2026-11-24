@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-10",
+  "round": 3,
+  "result": "pass",
+  "recorded_at": "2026-11-24T04:47:48.938Z",
+  "inputs": {
+    "branch": "feat/tru-10-prs-gates-needs-you",
+    "commit": "3f3d741"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-10-prs-gates-needs-you"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "22 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "6 test files changed with 9 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "567 lines changed; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 3f3d741"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "3 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/board.rs:66: pr_for picks with `max_by_key(|p| p.by_branch)`, and on a tie `max_by_key` returns the last match. GitHub lists PRs newest first, so the last match is the oldest PR. When two open PRs' branches both name a ticket (a re-opened PR, or a split such as backend/tru-6-a and backend/tru-6-b), or when two PRs tie only by title, the card and the Needs you 'merge' item show the oldest one and drop the rest without a log line. crates/server/tests/github.rs only tests one PR per ticket on a branch that names it against one tied by title, so no test covers this tie.",
+      "reason": "Ties now go to the highest PR number, the newest."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:97: checks() reads only check-runs and counts zero runs as Pending. A PR whose CI reports through commit statuses, or that has no Actions runs, shows 'checks pending' forever and never gets a 'merge' item in Needs you. Still open from Build rounds 1 and 2 and from Verify round 2."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github.rs:63-64: each per-PR check-runs and contents call ends in `?`. A single 403 or 5xx on one PR fails the whole GitHub read, and every repo keeps its stale PR list. The pulls call at :56 and the check-runs call at :63 read only the first page (per_page=100), and nothing is logged when more pages exist. Still open from Build rounds 1 and 2."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
