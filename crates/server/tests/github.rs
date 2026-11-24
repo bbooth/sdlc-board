@@ -229,6 +229,13 @@ async fn a_failed_part_keeps_its_earlier_value_and_marks_the_source() {
     let read = GitHub::new(&url, None, vec![gone]).unwrap().prs().await;
     let error = "GitHub /repos/bbooth/gone/pulls: not found (no earlier PRs)".to_string();
     assert_eq!((read.repos_read, read.errors.as_slice()), (0, [error].as_slice()));
+
+    // Next to a working repo whose PRs also failed, the missing repo is still named.
+    let both = GitHub::new(&url, None, vec![repo(), Repo { name: "bbooth/gone".into(), ..repo() }]).unwrap();
+    let state = sources::State::new();
+    sources::refresh(&state, &both).await;
+    let error = state.snapshot().sources[0].last_error.clone().unwrap();
+    assert!(error.starts_with("PR lists failed for bbooth/gone; "), "{error}");
 }
 
 // Without a token the next read waits long enough for reads like the last

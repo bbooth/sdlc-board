@@ -43,6 +43,8 @@ pub struct PrRead {
     pub errors: Vec<String>,
     /// Repos whose PR lists were read; none means nothing in the read is new.
     pub repos_read: usize,
+    /// Repos whose PR lists failed, named apart so one isn't lost among PR errors.
+    pub repos_failed: Vec<String>,
 }
 
 /// Reads each repo's PRs, their checks and their gate records.
@@ -117,6 +119,8 @@ impl GitHub {
                     prs
                 }
                 Err(e) => {
+                    tracing::warn!(repo = %repo.name, error = %e, "reading the repo's PRs failed");
+                    read.repos_failed.push(repo.name.clone());
                     let kept = if last.is_some() { "kept its PRs from an earlier read" } else { "no earlier PRs" };
                     read.errors.push(format!("{e} ({kept})"));
                     last.unwrap_or_default()

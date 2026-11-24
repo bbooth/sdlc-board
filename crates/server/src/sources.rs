@@ -51,7 +51,11 @@ impl Source for crate::github::GitHub {
         if let (0, [first, ..]) = (read.repos_read, read.errors.as_slice()) {
             anyhow::bail!("no repo's PRs could be read, first: {first}");
         }
-        let partial = read.errors.first().map(|e| format!("{} reads failed, first: {e}", read.errors.len()));
+        let repos = match read.repos_failed.as_slice() {
+            [] => String::new(),
+            names => format!("PR lists failed for {}; ", names.join(", ")),
+        };
+        let partial = read.errors.first().map(|e| format!("{repos}{} reads failed, first: {e}", read.errors.len()));
         let as_of = read.prs.iter().map(|p| p.read_at).min();
         Ok(Read { prs: read.prs, partial, as_of, ..Read::default() })
     }

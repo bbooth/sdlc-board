@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     let linear = linear::Linear::new(&endpoint, &key, config.repos.clone())?;
     tokio::spawn(sources::run(state.clone(), linear));
     let gh_endpoint = std::env::var("GITHUB_ENDPOINT").unwrap_or_else(|_| github::ENDPOINT.into());
-    let token = std::env::var("GITHUB_TOKEN").ok();
+    let token = std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty());
     if token.is_none() {
         tracing::warn!("GITHUB_TOKEN is not set: reading public repos only as often as 45 requests an hour allows");
     }
