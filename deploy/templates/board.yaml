@@ -14,6 +14,9 @@ data:
     name = {{ .name | quote }}
     linear_team = {{ .linearTeam | quote }}
     linear_project = {{ .linearProject | quote }}
+    {{- with .rolloutNamespace }}
+    rollout_namespace = {{ . | quote }}
+    {{- end }}
     {{- end }}
 ---
 apiVersion: apps/v1
@@ -38,7 +41,9 @@ spec:
         # A settings change restarts the pod, which reads board.toml once.
         checksum/config: {{ .Values | toJson | sha256sum }}
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: sdlc-board
+      # The token reads Rollouts (rbac.yaml) and nothing else.
+      automountServiceAccountToken: true
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- range . }}

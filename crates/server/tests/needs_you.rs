@@ -70,7 +70,7 @@ fn specs_to_approve_green_prs_and_blocked_tickets_need_the_owner() {
 fn an_open_pr_beats_a_merged_one_for_the_same_ticket() {
     let merged = pr("TRU-6", 7, Checks::Pass, false);
     let prs = [pr("TRU-6", 1, Checks::Pass, false), PrInfo { pr: Pr { merged: true, ..merged.pr.clone() }, ..merged }];
-    let cols = board::columns(&[issue("TRU-6", "PR review", true)], &prs);
+    let cols = board::columns(&[issue("TRU-6", "PR review", true)], &prs, &[]);
     let card = cols.iter().flat_map(|c| &c.tickets).find(|t| t.id == "TRU-6").unwrap();
     assert_eq!(card.pr.as_ref().map(|p| p.number), Some(1));
 }

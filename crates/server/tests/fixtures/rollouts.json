@@ -1,0 +1,42 @@
+{
+  "apiVersion": "argoproj.io/v1alpha1",
+  "kind": "RolloutList",
+  "metadata": {"resourceVersion": "912345"},
+  "items": [
+    {
+      "metadata": {"name": "web", "namespace": "booking"},
+      "spec": {"strategy": {"canary": {"steps": [
+        {"setWeight": 20}, {"analysis": {"templates": [{"templateName": "web-analysis"}]}},
+        {"setWeight": 50}, {"analysis": {"templates": [{"templateName": "web-analysis"}]}},
+        {"setWeight": 100}
+      ]}}},
+      "status": {
+        "phase": "Paused",
+        "message": "CanaryPauseStep",
+        "currentPodHash": "7d9f8c6b5",
+        "stableRS": "5c4b7f9d8",
+        "currentStepIndex": 1,
+        "canary": {
+          "weights": {"canary": {"podTemplateHash": "7d9f8c6b5", "weight": 20}, "stable": {"podTemplateHash": "5c4b7f9d8", "weight": 80}},
+          "currentStepAnalysisRunStatus": {"name": "web-7d9f8c6b5-12-1", "status": "Running"}
+        }
+      }
+    },
+    {
+      "metadata": {"name": "identity", "namespace": "booking"},
+      "spec": {"strategy": {"canary": {"steps": [
+        {"setWeight": 20}, {"analysis": {"templates": [{"templateName": "identity-analysis"}]}}, {"setWeight": 100}
+      ]}}},
+      "status": {
+        "phase": "Healthy",
+        "currentPodHash": "6f5d4c3b2",
+        "stableRS": "6f5d4c3b2",
+        "currentStepIndex": 3,
+        "canary": {
+          "weights": {"canary": {"podTemplateHash": "6f5d4c3b2", "weight": 0}, "stable": {"podTemplateHash": "6f5d4c3b2", "weight": 100}},
+          "currentStepAnalysisRunStatus": {"name": "identity-6f5d4c3b2-9-1", "status": "Successful"}
+        }
+      }
+    }
+  ]
+}
