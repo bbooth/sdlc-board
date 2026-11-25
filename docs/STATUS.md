@@ -34,6 +34,17 @@
   `GITHUB_TOKEN` set (GitHub is then read every minute): without one,
   GitHub reads are spaced by cost, often 20 minutes or more.
 
+- TRU-12: the server checks Cloudflare Access's signed token
+  (`Cf-Access-Jwt-Assertion`) on every route but `/healthz`, against
+  `[access]` in `board.toml` (`issuer`, `aud`); `/metrics` moved to its own
+  port, 9091. It serves the web build of the app at `/` from
+  `BOARD_WEB_DIR` (`crates/app/web/build.sh` builds it). A local run
+  without Access takes `BOARD_NO_ACCESS=1`. The native app sends a service
+  token from `BOARD_ACCESS_CLIENT_ID` and `BOARD_ACCESS_CLIENT_SECRET`.
+  `Dockerfile`, the chart in `deploy/`, `argocd/application.yaml` (one-time
+  setup in `argocd/README.md`), and CI pushes `ghcr.io/bbooth/sdlc-board`
+  from `main`.
+
 ## Next
 
-- TRU-12, then TRU-13 and TRU-14.
+- TRU-13 (Android) and TRU-14 (rollouts).

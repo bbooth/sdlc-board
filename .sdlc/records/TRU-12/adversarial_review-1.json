@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-12",
+  "round": 1,
+  "result": "fail",
+  "recorded_at": "2026-11-24T20:45:45.509Z",
+  "inputs": {
+    "branch": "feat/tru-12-deploy-web-access",
+    "commit": "fdd81d1",
+    "verify_record": ".sdlc/records/TRU-12/verify-1.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-12/verify-1.json says pass at a2986e2"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since a2986e2"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at fdd81d1"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read fdd81d1"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "10 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "2 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "2 stand: [operability] .github/workflows/ci.yaml:45: the image job runs on every push to main, and that includes Image Updater's write-back commit to deploy/.argocd-source-sdlc-board.yaml (argocd/application.yaml:11). The sequence: that commit becomes main's HEAD, so 'Decide tags' gives it :latest. Dockerfile:7 `COPY . .` copies deploy/ into the build because .dockerignore leaves it in, so the build cache misses, the image is rebuilt and gets a new digest. Image Updater sees the new digest, commits again, and the cycle repeats. What you'd see: an endless chain of write-back commits and CI image builds (up to 45 min each), and the pod restarted by Recreate on every cycle. booking avoids this by keeping its image jobs off `deploy/.argocd-source-*.yaml` changes (booking ci.yaml `changes` job, line 90). Nothing here does.; [web] crates/app/src/main.rs:79: the owner leaves the web board open in a tab past the Access session length (24 h by default). Its next /v1/snapshot fetch gets Cloudflare's 302 to <team>.cloudflareaccess.com. fetch follows the redirect cross-origin, CORS blocks it, and the promise rejects with a TypeError. After that, every 30 s read and every Refresh click fails th"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:256: the native app attaches CF-Access-Client-Id and CF-Access-Client-Secret to whatever BOARD_URL names, with no check that the scheme is https. If the owner sets BOARD_URL=http://board.trulinc.com, or keeps the http://localhost:8080 default while the token variables are exported, the long-lived service-token secret goes out in cleartext on the first request, before Cloudflare's redirect to https. That is enough for a network observer to read the board from anywhere. Suggest refusing to send the headers unless the URL is https (or a loopback address).",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "blocking",
+      "summary": ".github/workflows/ci.yaml:45: the image job runs on every push to main, and that includes Image Updater's write-back commit to deploy/.argocd-source-sdlc-board.yaml (argocd/application.yaml:11). The sequence: that commit becomes main's HEAD, so 'Decide tags' gives it :latest. Dockerfile:7 `COPY . .` copies deploy/ into the build because .dockerignore leaves it in, so the build cache misses, the image is rebuilt and gets a new digest. Image Updater sees the new digest, commits again, and the cycle repeats. What you'd see: an endless chain of write-back commits and CI image builds (up to 45 min each), and the pod restarted by Recreate on every cycle. booking avoids this by keeping its image jobs off `deploy/.argocd-source-*.yaml` changes (booking ci.yaml `changes` job, line 90). Nothing here does.",
+      "status": "open",
+      "scope": "operability",
+      "reason": "At fdd81d1, ci.yaml triggers on every push to main, and the image job has no paths filter, so it runs for every push. Its 'Decide tags' step tags :latest whenever the commit is main's HEAD. A write-back commit pushed with a deploy key does trigger workflows; only GITHUB_TOKEN pushes don't. .dockerignore lists only target, .git and .sdlc/records, so `COPY . .` in the Dockerfile includes deploy/.argocd-source-sdlc-board.yaml. That cache miss rebuilds the cargo step. The rebuilt image gets a new digest anyway: buildx stamps the build time in the image config and no SOURCE_DATE_EPOCH is set. application.yaml uses the digest strategy with git write-back to main, which closes the loop. booking's ci.yaml (filter-every, predicate-quantifier: every) excludes '!deploy/.argocd-source-*.yaml', and nothing equivalent exists here.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/main.rs:45: neither axum::serve has with_graceful_shutdown, and no SIGTERM handler is installed. board-server is PID 1 in the distroless image (Dockerfile ENTRYPOINT), and the kernel ignores SIGTERM to a namespace's PID 1 unless it has a handler. So on every rollout the old pod stays up for the whole terminationGracePeriod (30s) and is then SIGKILLed. With `strategy: Recreate` (deploy/templates/board.yaml:28) the new pod only starts after that, so each deploy is at least 30s with no endpoint. That happens on every Image Updater cycle.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "deploy/templates/board.yaml:82: readiness is /healthz (crates/server/src/routes.rs:26), which returns ok before the first Access key read in Access::run has finished or succeeded. The sequence: Recreate starts the new pod, it turns Ready at once, and until the keys load every request gets 401 'Log in through Cloudflare Access', even with a valid token. If the first read fails (egress or DNS not ready yet), that lasts at least MIN_REREAD (60s), because may_reread() is false for that minute. There is also no old pod to fall back on. The only signal is the access_keys error counter. Nothing marks the pod unready or alerts while it can authenticate no one.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/app/src/main.rs:79: the owner leaves the web board open in a tab past the Access session length (24 h by default). Its next /v1/snapshot fetch gets Cloudflare's 302 to <team>.cloudflareaccess.com. fetch follows the redirect cross-origin, CORS blocks it, and the promise rejects with a TypeError. After that, every 30 s read and every Refresh click fails the same way. The bar shows 'Couldn't refresh from https://board.trulinc.com: JsValue(TypeError: Failed to fetch ...)' over a board that keeps getting older. Nothing says the login expired or that a page reload fixes it. Possible fixes: set RequestInit redirect to 'manual' and treat an opaqueredirect or 401 response as 'login expired', then show a reload prompt or call location.reload(). Verify only exercised a fresh login, so this sequence was never observed.",
+      "status": "open",
+      "scope": "web",
+      "reason": "At fdd81d1, the wasm get() in crates/app/src/main.rs builds RequestInit with only a timeout signal. No redirect mode is set, so fetch follows redirects. It sends no X-Requested-With header, which is what makes Access answer 401 instead of redirecting. A rejected fetch goes through err(), which formats it as format!(\"{e:?}\") (the JsValue(...) text). The bar code prints 'Couldn't refresh from {url}: {e}' while the old snap stays on screen. Nothing in the diff detects a redirect or an expired login, and no test covers it. The described sequence can happen as written. The impact is a confusing message over a stale board, not a data leak.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:72: browser errors are not JS strings. A fetch TypeError, or the DOMException from AbortSignal.timeout after GIVE_UP, falls through to format!(\"{e:?}\"), so the user sees text like 'JsValue(TimeoutError: The operation timed out. ...)' with the Rust debug wrapper and possibly a stack. The native build shows ureq's readable message instead. Read the error's `message` field, or map a timeout to the same wording as the native deadline.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/routes.rs:19: ServeDir serves index.html, board-app.js and board-app_bg.wasm under fixed names with no Cache-Control. Browsers cache them heuristically from Last-Modified, and Cloudflare caches .js by extension (its default list leaves out .wasm) and adds a browser TTL. After a deploy that changes the app, a browser can pair a cached old board-app.js with a new board-app_bg.wasm. The wasm-bindgen imports then don't match and the page stays blank, with the error only in the console. Send no-cache (or no-store) for these files, or hash their names.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/web/index.html:10: until the wasm downloads and starts (a multi-MB release build over the tunnel), the page is an empty canvas with no loading text. If init() or WebRunner::start fails (main.rs:40), the error goes only to console.error and the page stays blank for good. A visible 'Loading...' placeholder in the HTML, plus an error message written into the page when start fails, would show the user what happened.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/web/index.html:10: the whole web UI draws into a single canvas. As far as I can tell from the diff, eframe's web screen-reader support isn't enabled, so assistive tech sees no text and no Refresh button. The canvas has no aria-label or fallback content either. The board's audience is one owner, so this is minor, but the web build can't be read with a screen reader.",
+      "status": "open",
+      "scope": "web"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/app/src/main.rs:69: no test runs the wasm entry point or the browser fetch path: canvas lookup, origin URL, AbortSignal deadline, non-2xx handling. crates/app/tests/board.rs only renders the shared lib UI. Every web-specific state (refused, timed out, redirected) is covered only by Verify's manual browser check against a local signer, not real Cloudflare.",
+      "status": "open",
+      "scope": "web"
+    }
+  ],
+  "decision": "Back to Build: fix what stands, then Build, Verify and review again",
+  "evidence": []
+}

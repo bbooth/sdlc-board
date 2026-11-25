@@ -5,6 +5,10 @@ use serde::Deserialize;
 pub struct Config {
     /// Where to listen; 0.0.0.0:8080 if unset.
     pub listen: Option<String>,
+    /// Where `/metrics` listens; 0.0.0.0:9091 if unset.
+    pub metrics_listen: Option<String>,
+    /// The Cloudflare Access application the server checks tokens against.
+    pub access: Option<crate::access::Settings>,
     pub repos: Vec<Repo>,
 }
 

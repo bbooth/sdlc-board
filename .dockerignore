@@ -1,0 +1,6 @@
+target
+.git
+.sdlc
+deploy
+argocd
+docs

@@ -1,0 +1,36 @@
+# Routed by the Cloudflare Tunnel to the shared Traefik Gateway, behind Access.
+hostnames:
+  - board.trulinc.com
+
+# The Access application in front of hostnames, from homelab-infra's
+# terraform/cloudflare (output board_access_aud); not secrets.
+access:
+  issuer: https://ancient-band-e5e4.cloudflareaccess.com
+  aud: 67892c96e1096e4b477ad821bf4d4b08933e8fc44d56a1a3d7d254eea685e35b
+
+# board.toml's repos.
+repos:
+  - name: bbooth/booking
+    linearTeam: TRU
+    linearProject: Booking
+  - name: bbooth/sdlc-board
+    linearTeam: TRU
+    linearProject: SDLC board
+
+# Applied by hand (argocd/README.md): LINEAR_API_KEY, optional GITHUB_TOKEN.
+tokensSecret: sdlc-board-tokens
+
+# image.tag is what ArgoCD Image Updater pins (argocd/application.yaml).
+image:
+  repository: ghcr.io/bbooth/sdlc-board
+  tag: latest
+# Applied by hand while the GHCR package is private; [] once it's public.
+imagePullSecrets:
+  - ghcr-pull
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 128Mi

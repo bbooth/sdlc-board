@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-12",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-24T20:17:13.414Z",
+  "inputs": {
+    "branch": "feat/tru-12-deploy-web-access",
+    "commit": "56f7b50"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-12-deploy-web-access"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "28 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "4 test files changed with 6 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "790 lines changed, counting 160 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 56f7b50"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "6 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/server/src/access.rs: the Access key refresh job only logs; no metric for its rate, errors or duration, so a Cloudflare certs outage (every request 401, pod still Ready) has nothing to alert on.",
+      "reason": "Access::read_keys now counts each read (periodic and on an unknown key) through Metrics::observe as source access_keys: board_source_reads_total, board_source_read_errors_total and board_source_read_duration_seconds. Tested by key_reads_are_counted_and_a_failed_one_is_an_error."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": ".sdlc/config.json: evidence.browser is still [] although the app now has a web build.",
+      "reason": "evidence.browser now covers ^crates/app/src/ and ^crates/app/web/, and the $comment says so."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/src/main.rs: no automated test covers the native app sending CF-Access-Client-Id/Secret; with only one of the two env vars set it silently sent no token.",
+      "reason": "The half-set case is now an error shown in the app ('set both … or neither'). The headers themselves are checked end to end in Verify; main.rs has no test seam."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/tests/access.rs: no test checks a token signed with a newly rotated key is accepted once the keys are reread."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/routes.rs: web-build requests (served by the ServeDir fallback) are labelled route=\"unmatched\", the same as junk.",
+      "reason": "The web build is served on routes \"/\" and \"/{*file}\", so its requests and refusals are counted under those."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": ".github/workflows/ci.yaml: the deploy job has no timeout-minutes and its kubeconform curl no --max-time.",
+      "reason": "timeout-minutes: 10 and curl --max-time 120."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}

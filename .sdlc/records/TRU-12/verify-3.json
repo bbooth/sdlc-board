@@ -1,0 +1,140 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-12",
+  "round": 3,
+  "result": "pass",
+  "recorded_at": "2026-11-24T21:45:42.018Z",
+  "inputs": {
+    "branch": "feat/tru-12-deploy-web-access",
+    "commit": "10146d4",
+    "build_record": ".sdlc/records/TRU-12/build-4.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-12/build-4.json says pass at a8dd3b0"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since a8dd3b0"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 10146d4"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 10146d4"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-8, AC-9"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "11 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "4 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/server/tests/access.rs:a_live_access_token_gets_the_snapshot_and_the_web_build passed: cargo test -p board-server --test access -- --exact a_live_access_token_gets_the_snapshot_and_the_web_build"
+    },
+    {
+      "name": "rerun:AC-9",
+      "pass": true,
+      "detail": "crates/server/tests/access.rs:without_a_live_access_token_nothing_is_served passed: cargo test -p board-server --test access -- --exact without_a_live_access_token_nothing_is_served"
+    },
+    {
+      "name": "rerun:AC-9",
+      "pass": true,
+      "detail": "crates/server/tests/access.rs:an_unknown_key_reads_the_keys_again_at_most_once_a_minute passed: cargo test -p board-server --test access -- --exact an_unknown_key_reads_the_keys_again_at_most_once_a_minute"
+    },
+    {
+      "name": "rerun:AC-9",
+      "pass": true,
+      "detail": "crates/server/tests/access.rs:key_reads_are_counted_and_a_failed_one_is_an_error passed: cargo test -p board-server --test access -- --exact key_reads_are_counted_and_a_failed_one_is_an_error"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "7 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "resolved",
+      "summary": "Round 2's finding that provenance changed the :latest digest on every rebuild: ci.yaml now sets provenance: false. Locally, two builds of the same context had different image IDs with provenance=true and identical ones with provenance=false (provenance.log). Not shown: buildx's docker-container driver as CI runs it, or the digest GHCR stores."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": ".github/workflows/ci.yaml: the new 'Decide tags' step has no automated test. I checked it only in scratch repos (decide-tags.log). Two edge cases follow from the design and are not defects. (1) A docs-only push on top makes an older run drop :latest, and the docs run's own build pushes :latest. That build keeps the same digest only if the gha cache gives identical layers. (2) .github/, README.md, CLAUDE.md, .claude/ and board.toml are still in the Docker build context, so a CI-only change like a8dd3b0 reruns COPY . . and cargo build. If that rebuild isn't byte-identical, Image Updater rolls out a functionally identical image. Only the registry can show either case."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Carried, still true at 10146d4: crates/app/src/main.rs (wasm get), no test covers the expired-login path (set_redirect(Manual)). The wasm code is cfg'd out of the native tests. I saw it work only in Chromium against the stand-in edge (shots/06-expired-bar.png)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Carried: no test checks that the public router doesn't serve /metrics. Live, the public port gave 401 without a token and 404 with one (direct.log)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Carried: the native app refused by Access shows 'expected value at line 1 column 1', not that access was refused (shots/app-strip.png). There's no test for sending the CF-Access-Client-Id/Secret headers or for the one-of-two check."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Carried: deploy/values.yaml access.issuer and access.aud are still empty, so CI's deploy job (helm template) fails until the owner fills them in, as the ticket notes say."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Not exercised here, cluster only: real Cloudflare Access login, expiry and service-token policy; the tunnel; the ArgoCD sync; Image Updater's write-back and the paths-ignore; the GHCR push and the real :latest digest behaviour; the ServiceMonitor; the NetworkPolicy. Android is TRU-13. I didn't rebuild the Docker image: no image input changed since 40e5377 except ci.yaml in the build context."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-8 test crates/server/tests/access.rs:a_live_access_token_gets_the_snapshot_and_the_web_build: PASS (single-tests.log)",
+    "AC-8 browser Chromium through the stand-in edge :8443 to board-server at 10146d4; verify3-tru12/shots/03-after-login.png, 06-expired-bar.png, 07-after-reload.png, 09-server-401-bar.png, 10-recovered.png, browser.log, edge.log: the board was drawn after login. On expiry, the expired-login message appeared over the kept board and the redirect wasn't followed. A reload showed the team login page. The server's 401 showed '401 Unauthorized'. The board recovered.",
+    "AC-8 e2e native board-app under Xvfb with the service-token env vars; verify3-tru12/shots/05-app-both.png, edge-app.log: edge: 'forwarded (service-token) 200'; the same board as the browser",
+    "AC-8 e2e grep of the web build and the native binary; verify3-tru12/tokens.log: 0 hits across 36 checks",
+    "AC-9 test crates/server/tests/access.rs:without_a_live_access_token_nothing_is_served: PASS; FAILS with the audience check removed or with set_issuer removed (mutations.log)",
+    "AC-9 test crates/server/tests/access.rs:an_unknown_key_reads_the_keys_again_at_most_once_a_minute: PASS (single-tests.log)",
+    "AC-9 test crates/server/tests/access.rs:key_reads_are_counted_and_a_failed_one_is_an_error: PASS (single-tests.log)",
+    "AC-9 browser fresh Chromium at the stand-in edge, before login and after expiry; verify3-tru12/shots/01-before-login.png, 07-after-reload.png, browser.log, edge.log: only the login page for every path, no canvas, nothing forwarded before login; after expiry, 302 to the login origin",
+    "AC-9 e2e native board-app under Xvfb: no credentials, wrong secret, ID only, secret only; verify3-tru12/shots/app-strip.png, edge-app.log: an error and 'No board yet' every time; ID only and secret only send no request",
+    "AC-9 e2e curl straight to board-server :8080 with 10 header variants on 12 paths; verify3-tru12/direct.log: 401 on every path but /healthz for every bad token; valid: 200 or 404; Bearer and cookie forms: 401",
+    "AC-9 e2e CI 'Decide tags' step from 10146d4 run in scratch git repos; verify3-tru12/tags/harness.sh, decide-tags.log, provenance.log: write-back-only commits on top keep :latest; any other change on top drops it; the old step and the no-exclude control drop it on write-back; provenance=false gives a stable image ID"
+  ]
+}
