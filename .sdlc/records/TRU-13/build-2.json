@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-13",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-25T21:45:40.864Z",
+  "inputs": {
+    "branch": "feat/tru-13-android",
+    "commit": "28f756b"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-13-android"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "15 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "1 test files changed with 6 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "621 lines changed, counting 85 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 28f756b"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "2 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/app/src/app.rs:161: Save only checks the token headers, so it accepts an empty Board address. After that, fetch returns early at line 127 and the board shows \"Loading from …\" (line 210) indefinitely, with no error. The form only opens by itself on a fresh start (line 108), so on Android the user is stuck until they find Settings again. The form should refuse to save an empty address, as it already refuses a half-set token."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "AC-8 (Android half): crates/app/tests/settings.rs covers the storage round-trip (settings_round_trip_through_storage), the two CF-Access-Client-* headers (reads_send_the_token_as_the_access_headers) and the form saving (the_settings_form_saves_to_storage). The CI android job (.github/workflows/ci.yaml:23) shows only that the APK builds. Nothing yet shows the APK on the owner's phone displaying the same board as the web build. That check is still pending and has to be recorded in the PR before merge."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
