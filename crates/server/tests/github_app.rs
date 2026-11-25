@@ -149,7 +149,7 @@ async fn fake() -> Fake {
 }
 
 fn repo(name: &str) -> Repo {
-    Repo { name: name.into(), linear_team: "TRU".into(), linear_project: "Board".into() }
+    Repo { name: name.into(), linear_team: "TRU".into(), linear_project: "Board".into(), rollout_namespace: None }
 }
 
 fn settings() -> Settings {

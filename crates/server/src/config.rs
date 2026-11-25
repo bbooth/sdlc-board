@@ -19,6 +19,9 @@ pub struct Repo {
     /// The Linear team key (the ticket prefix) and project its tickets live in.
     pub linear_team: String,
     pub linear_project: String,
+    /// The namespace its Argo Rollouts run in, if it deploys any.
+    #[serde(default)]
+    pub rollout_namespace: Option<String>,
 }
 
 impl Config {

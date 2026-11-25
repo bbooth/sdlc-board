@@ -1,0 +1,99 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-14",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-25T19:34:34.982Z",
+  "inputs": {
+    "branch": "feat/tru-14-rollouts",
+    "commit": "7b93e1a",
+    "build_record": ".sdlc/records/TRU-14/build-1.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-14/build-1.json says pass at 69a9cb7"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 69a9cb7"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 7b93e1a"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 7b93e1a"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-4"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "5 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e and browser evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "2 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-4",
+      "pass": true,
+      "detail": "crates/server/tests/rollouts.rs:only_a_rollout_in_flight_shows_on_its_tickets_card passed: cargo test -p board-server --test rollouts only_a_rollout_in_flight_shows_on_its_tickets_card -- --exact"
+    },
+    {
+      "name": "rerun:AC-4",
+      "pass": true,
+      "detail": "crates/server/tests/rollouts.rs:a_merged_ticket_still_in_pr_review_shows_its_rollout passed: cargo test -p board-server --test rollouts a_merged_ticket_still_in_pr_review_shows_its_rollout -- --exact"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "2 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/board.rs:rollouts_for links each in-flight rollout in a repo to every ticket of that repo in Stage Rollout, or in PR review with its PR merged. A ticket left in Rollout after its own canary finished will show the next, unrelated canary. That goes against AC-4's 'a ticket with no rollout in progress shows none'. This is documented (latest-tagged images) in docs/STATUS.md and the code comment, so it is not blocking, but the owner should know."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "deploy/templates/rbac.yaml and _helpers.tpl were not rendered (no helm in this container). Only reading them: one RoleBinding per distinct rolloutNamespace to a get/list-only ClusterRole on argoproj.io rollouts, and the pod sets automountServiceAccountToken: true, which overrides the ServiceAccount's false. Nothing was checked on the real cluster."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-4 test crates/server/tests/rollouts.rs:only_a_rollout_in_flight_shows_on_its_tickets_card: PASS. In a scratch worktree with the stableRS==currentPodHash completeness check disabled in cluster.rs it FAILS: the TRU-6 card also gets the healthy 'identity' rollout. The test can fail. The full workspace tests, cargo fmt --check and clippy -D warnings all pass.",
+    "AC-4 test crates/server/tests/rollouts.rs:a_merged_ticket_still_in_pr_review_shows_its_rollout: PASS",
+    "AC-4 e2e GET /v1/snapshot from board-server with KUBE_ENDPOINT serving tests/fixtures/rollouts.json and a stub Linear (booking: TRU-6 Rollout, TRU-7 Build; sdlc-board: TRU-10 Rollout): TRU-6 rollouts = [web: step 2 of 5, weight 20, Paused, analysis Running]. TRU-7 and TRU-10 have none. The healthy identity rollout is absent. The cluster source has last_good set and no error.",
+    "AC-4 browser web build (crates/app/web/build.sh) served by BOARD_WEB_DIR, Playwright chromium with the page kept open while the stand-in Rollout changed: The TRU-6 card read 'web: step 2 of 5 at 20%, Paused, analysis Running'. After the stand-in moved to currentStepIndex 3 at weight 50, the open page updated to 'web: step 4 of 5 at 50%, Paused, analysis Running'. After the rollout completed (stableRS = currentPodHash), the line disappeared from the card. The TRU-7 and TRU-10 cards never showed a rollout. The console had no errors.",
+    "AC-4 e2e cases the tests don't cover: a Rollout with no status, a blueGreen Rollout, an aborted canary with a Failed analysis, then the namespace returning 404: No status and blueGreen were skipped without error. The aborted canary showed as 'sched' step 1 of 2, weight 0, phase Aborted, analysis Failed. On the 404 the cluster source kept its last rollouts on the card and reported last_error 'no namespace's rollouts could be read ... 404'. Linear and GitHub were unaffected."
+  ]
+}

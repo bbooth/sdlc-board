@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use std::sync::Arc;
 
 fn repo(name: &str, project: &str) -> Repo {
-    Repo { name: name.into(), linear_team: "TRU".into(), linear_project: project.into() }
+    Repo { name: name.into(), linear_team: "TRU".into(), linear_project: project.into(), rollout_namespace: None }
 }
 
 fn ticket(id: &str, stage: &str) -> Value {

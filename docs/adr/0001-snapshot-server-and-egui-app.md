@@ -28,3 +28,7 @@ web, to one person, and no client may hold a Linear or GitHub token.
     served on its own port, which no route reaches, so Prometheus needn't
     pass Access. The server won't start without `[access]` settings unless
     `BOARD_NO_ACCESS=1`, for local runs.
+- The cluster is read with the same `reqwest` client as Linear and GitHub,
+  one GET per namespace, rather than the `kube` crate the plan named
+  (amended by TRU-14): one list call didn't need a Kubernetes client and
+  its dependencies.
