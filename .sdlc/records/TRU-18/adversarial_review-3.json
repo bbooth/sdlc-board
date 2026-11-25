@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-18",
+  "round": 3,
+  "result": "pass",
+  "recorded_at": "2026-11-25T21:59:11.016Z",
+  "inputs": {
+    "branch": "feat/tru-18-github-app",
+    "commit": "d24b4f2",
+    "verify_record": ".sdlc/records/TRU-18/verify-3.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-18/verify-3.json says pass at 6e18be7"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 6e18be7"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at d24b4f2"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read d24b4f2"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, operability"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "1 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "0 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "0 blocking findings refuted, 1 minor carried to the PR"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:135: a 401 on a data GET under the App calls forget() but doesn't mark the repo in AppAuth.failed. If GitHub keeps rejecting freshly minted tokens (for example, permissions changed while minting still succeeds), every following request in the read mints a new token: both pulls lists, then the check-runs and contents calls for each PR. Each mint is counted as board_github_app_tokens_total{result=\"ok\"}, so the metric rises while every read fails. The RETRY throttle at github_app.rs:269 doesn't apply because no live token is left. Consider treating the 401 like a failed attempt, or counting it, so the failure shows up as a signal and the mints are limited to one per minute.",
+      "status": "open",
+      "scope": "operability"
+    }
+  ],
+  "decision": "Open the PR and advance to PR review",
+  "evidence": []
+}
