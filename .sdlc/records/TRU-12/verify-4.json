@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-12",
+  "round": 4,
+  "result": "pass",
+  "recorded_at": "2026-11-25T01:14:00.269Z",
+  "inputs": {
+    "branch": "feat/tru-12-deploy-web-access",
+    "commit": "9e5d653",
+    "build_record": ".sdlc/records/TRU-12/build-6.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-12/build-6.json says pass at beda40a"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since beda40a"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 9e5d653"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 9e5d653"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-8, AC-9"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "12 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "4 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/server/tests/access.rs:a_live_access_token_gets_the_snapshot_and_the_web_build passed: cargo test -p board-server --test access -- --exact a_live_access_token_gets_the_snapshot_and_the_web_build"
+    },
+    {
+      "name": "rerun:AC-9",
+      "pass": true,
+      "detail": "crates/server/tests/access.rs:without_a_live_access_token_nothing_is_served passed: cargo test -p board-server --test access -- --exact without_a_live_access_token_nothing_is_served"
+    },
+    {
+      "name": "rerun:AC-9",
+      "pass": true,
+      "detail": "crates/server/tests/access.rs:an_unknown_key_reads_the_keys_again_at_most_once_a_minute passed: cargo test -p board-server --test access -- --exact an_unknown_key_reads_the_keys_again_at_most_once_a_minute"
+    },
+    {
+      "name": "rerun:AC-9",
+      "pass": true,
+      "detail": "crates/server/tests/access.rs:key_reads_are_counted_and_a_failed_one_is_an_error passed: cargo test -p board-server --test access -- --exact key_reads_are_counted_and_a_failed_one_is_an_error"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "10 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "resolved",
+      "summary": "Carried from round 3: deploy/values.yaml access.issuer and access.aud were empty. 54182c6 fills them, and helm template renders them into board.toml's [access] (rendered.yaml). The AUD's correctness rests on homelab-infra's Terraform state, which I couldn't read here."
+    },
+    {
+      "severity": "minor",
+      "status": "resolved",
+      "summary": ".github/workflows/ci.yaml: the deploy job used to pass with nothing validated. helm lint exits 0 with empty required values, and without pipefail a failing helm template piped into kubeconform exited 0. With shell: bash the step's command exits 1 on helm's error (pipefail.log)."
+    },
+    {
+      "severity": "minor",
+      "status": "resolved",
+      "summary": "crates/server/tests/access.rs: the shared-web-dir race. The 10146d4 test failed 6/1200 runs under load with CI's assertion; 9e5d653 passed 1200/1200 under the same load and 300/300 serially (race.log)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/tests/access.rs:57: each board() call now creates its own std::env::temp_dir()/board-web-<pid>-<n> and never removes it, so every test run leaves about 5 directories behind. I found 7037 under /tmp after my loops, and removed them."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Not shown here: the real Access front and keys. The agent proxy refused CONNECT to ancient-band-e5e4.cloudflareaccess.com and board.trulinc.com with 403. The board-server on the rendered config never loaded the real keys (it failed closed, 401), and I saw no status or redirect for https://board.trulinc.com. These are for the cluster end-to-end check after merge."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "With no usable Access keys, /healthz stays 200 (the probes in the rendered Deployment use /healthz on 8080) while every other request gets 401. A pod that can't reach the certs URL looks healthy, and only board_source_read_errors_total{source=\"access_keys\"} shows the failure (real/server.log, real/requests.log)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Carried: crates/app/src/main.rs (wasm get), no test covers the expired-login path (set_redirect(Manual)). I saw it work only in Chromium against the stand-in edge (shots/06-expired-bar.png)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Carried: no test checks that the public router doesn't serve /metrics. Live, the public port gave 401 without a token and 404 with one (direct.log)."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Carried: the native app refused by Access shows 'expected value at line 1 column 1', not that access was refused (shots/app-strip.png). There's no test for sending the CF-Access-Client-Id/Secret headers or for the one-of-two check."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Carried, cluster only: real Access login, expiry and service-token policy; the tunnel; ArgoCD sync; Image Updater write-back; the GHCR push; the ServiceMonitor; the NetworkPolicy; real kubeconform schema validation; CI's helm v4.3.0 (I used 3.19.0). Android is TRU-13."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-8 test crates/server/tests/access.rs:a_live_access_token_gets_the_snapshot_and_the_web_build: PASS alone (single-tests.log). The whole access binary passed 300/300 serially and 1200/1200 under 8-way concurrent load. The 10146d4 version of the test failed 6/1200 under the same load, with CI's assertion failure at access.rs:100 (left (200, false), right (200, true)) (race.log, rep-old-fail-*.out)",
+    "AC-8 browser Chromium through the stand-in edge :8443 to board-server at 9e5d653; verify4-tru12/shots/03-after-login.png, 06-expired-bar.png, 07-after-reload.png, 09-server-401-bar.png, 10-recovered.png, browser.log, edge.log: board drawn after login; expired-login message over the kept board with the redirect not followed; reload shows the team login; the server's 401 shows '401 Unauthorized'; recovers",
+    "AC-8 e2e native board-app under Xvfb with the service-token env vars; verify4-tru12/shots/app-both.png, edge-app.log: edge: 'forwarded (service-token) 200'; the same board as the browser",
+    "AC-8 e2e grep of the web build and the native binary; verify4-tru12/tokens.log: 0 hits for every token name, prefix, API host and the real key value",
+    "AC-9 test crates/server/tests/access.rs:without_a_live_access_token_nothing_is_served: PASS; FAILS with set_issuer commented out (mutations.log)",
+    "AC-9 test crates/server/tests/access.rs:an_unknown_key_reads_the_keys_again_at_most_once_a_minute: PASS (single-tests.log)",
+    "AC-9 test crates/server/tests/access.rs:key_reads_are_counted_and_a_failed_one_is_an_error: PASS (single-tests.log)",
+    "AC-9 browser fresh Chromium at the stand-in edge, before login and after expiry; verify4-tru12/shots/01-before-login.png, 07-after-reload.png, browser.log, edge.log: only the login page for every path, no canvas, nothing forwarded before login; after expiry, 302 to the login origin",
+    "AC-9 e2e native board-app under Xvfb: no credentials, wrong secret, ID only, secret only; verify4-tru12/shots/app-strip.png, edge-app.log: an error and 'No board yet' each time; ID only and secret only send no request",
+    "AC-9 e2e curl straight to board-server :8080 with 13 header variants on 12 paths; verify4-tru12/direct.log: 401 on every path but /healthz for every bad or missing token; valid: 200 or 404; Bearer and cookie forms: 401",
+    "AC-9 e2e helm template with the real values (alpine/helm:3.19.0) and board-server started on the rendered board.toml; verify4-tru12/rendered.yaml, real/server.log, real/requests.log, real/egress.log: [access] matches values.yaml; the real certs URL is blocked by the agent proxy (403), so no keys load; the server refuses everything but /healthz with 401 and retries the keys every minute",
+    "AC-9 e2e ci.yaml 'Validate rendered manifests' run block under bash -eo pipefail vs bash -e, empty vs real access values; verify4-tru12/pipefail.log: empty + pipefail: rc=1; empty + old shell: rc=0 with 0 resources; real: past helm with 6 resources"
+  ]
+}
