@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-14",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-25T19:36:37.895Z",
+  "inputs": {
+    "branch": "feat/tru-14-rollouts",
+    "commit": "2593c74",
+    "verify_record": ".sdlc/records/TRU-14/verify-1.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-14/verify-1.json says pass at 7b93e1a"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 7b93e1a"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 2593c74"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read 2593c74"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, api, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "5 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "0 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "0 blocking findings refuted, 5 minor carried to the PR"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:83: when one repo's namespace fails to list but another succeeds, the cluster source replaces its whole read with the partial one and sets last_good to now. The failed repo's in-flight rollouts then disappear from their cards, and a client can't tell that apart from 'no rollout in progress' (AC-4's 'shows none'). The only sign is the cluster source's last_error. SourceStatus.last_good (crates/api/src/lib.rs:28) promises to account for older parts kept after a failure, but this source keeps none. Only one repo sets rollout_namespace today, so nobody can hit this yet.",
+      "status": "open",
+      "scope": "api"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/main.rs:46: when Cluster::from_env fails (e.g. the pod runs with an old chart's automountServiceAccountToken: false, so ca.crt is missing, or the CA doesn't parse), or at :44 when no cluster is found, the cluster source is never registered. Nothing appears for it in the snapshot's sources, and no board_source_*{source=\"cluster\"} series or age gauge is exported. The only signal is one log line at startup. Every card then shows no rollouts, which looks the same as AC-4's 'no rollout in progress' case, and no stale marker or metric shows the reads aren't happening. Registering the source with its error (or exporting its age from start) would make it visible.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:140: if a cluster read fails, refresh keeps the cluster source's earlier rollouts. A canary that finishes while the API can't be read (RoleBinding pruned, 403, timeout) stays on its tickets' cards at its last step, weight and analysis until a read works again. The source is marked stale, but the card's rollout line isn't, so the owner can read an old step as the current one.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/sources.rs:82: a partial cluster read reports only the first namespace's error and a bare count ('N namespaces failed'), without the total read the way Linear's 'N of M repos' does. The other namespaces' errors aren't logged anywhere, so with two or more rollout namespaces failing for different reasons, only one cause can be found.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": "deploy/templates/rbac.yaml:19: the sdlc-board Application (project default, destination namespace sdlc-board, no CreateNamespace for others) now creates a RoleBinding in each rolloutNamespace. If one of those namespaces doesn't exist yet, for example a repo added to values before its first deploy, the sync fails for the whole sdlc-board app, not just that binding, which blocks unrelated board deploys until the namespace exists.",
+      "status": "open",
+      "scope": "operability"
+    }
+  ],
+  "decision": "Open the PR and advance to PR review",
+  "evidence": []
+}
