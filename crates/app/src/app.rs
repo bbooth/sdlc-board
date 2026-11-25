@@ -158,7 +158,10 @@ impl BoardApp {
         let (save, cancel) =
             ui.horizontal(|ui| (ui.button("Save").clicked(), has_board && ui.button("Cancel").clicked())).inner;
         if save {
-            let checked = match draft.url.trim() {
+            for field in [&mut draft.url, &mut draft.client_id, &mut draft.client_secret] {
+                *field = field.trim().to_string();
+            }
+            let checked = match draft.url.as_str() {
                 "" => Err("set the board's address".to_string()),
                 _ => draft.headers().map(drop),
             };

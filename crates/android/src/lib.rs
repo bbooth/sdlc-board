@@ -8,7 +8,13 @@ use winit::platform::android::activity::AndroidApp;
 #[no_mangle]
 fn android_main(app: AndroidApp) {
     android_logger::init_once(android_logger::Config::default().with_max_level(log::LevelFilter::Info));
-    let store = app.internal_data_path().map(|d| d.join("settings.json"));
+    // Auto Backup copies the app's files off the phone, but never `no_backup`,
+    // so the Access secret stays on it.
+    let store = app.internal_data_path().and_then(|d| d.parent().map(|p| p.join("no_backup")));
+    if let Some(Err(e)) = store.as_deref().map(std::fs::create_dir_all) {
+        log::error!("making the settings folder: {e}");
+    }
+    let store = store.map(|d| d.join("settings.json"));
     let settings = match store.as_deref().map(board_app::Settings::load) {
         Some(Ok(s)) => s.unwrap_or_default(),
         Some(Err(e)) => {

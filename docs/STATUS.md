@@ -60,7 +60,9 @@
 - TRU-13: the Android build, `crates/android`, starts the same app in a
   native activity. On first start it asks for the board's address and an
   Access service token (client ID and secret) and keeps them in the app's
-  own storage; Settings changes them. CI's `android` job builds a signed
+  own storage, in `no_backup` so Auto Backup leaves the secret on the
+  phone; Settings changes them. It targets SDK 34, so Android 15 doesn't
+  draw it under the status bar. CI's `android` job builds a signed
   release APK, the run's `sdlc-board-apk` artifact, with the key in the
   `ANDROID_KEYSTORE_BASE64` and `ANDROID_KEYSTORE_PASSWORD` secrets (a
   throwaway key without them). Locally, with `ANDROID_HOME` and

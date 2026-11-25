@@ -67,8 +67,9 @@ fn the_settings_form_saves_to_storage() {
     harness.step();
     harness.get_by_label("Couldn't save: set the board's address");
     assert_eq!(Settings::load(&path).unwrap(), None);
+    // Pasted values often carry spaces; they are saved without them.
     let typed = [
-        ("Board address", "https://board.example"),
+        ("Board address", " https://board.example "),
         ("Access client ID", "id.access"),
         ("Access client secret", "s3cret"),
     ];

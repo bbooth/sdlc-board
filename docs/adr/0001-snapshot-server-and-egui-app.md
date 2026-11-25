@@ -27,7 +27,10 @@ web, to one person, and no client may hold a Linear or GitHub token.
     without its `accesskit` feature, which doesn't build with the native
     activity. `cargo-apk` is no longer developed; it needs no Java or
     Gradle, and the APK has nothing but the library. If it stops building,
-    `xbuild` or a Gradle wrapper around `cargo-ndk` replaces it.
+    `xbuild` or a Gradle wrapper around `cargo-ndk` replaces it. It targets
+    SDK 34: at 35 Android draws the app edge to edge, and a NativeActivity
+    can't read the window insets to keep clear of the system bars. Moving
+    to 35 means GameActivity (Gradle) or reading the insets over JNI.
 - Access is Cloudflare Access (a browser login, or a service token from the
   native and Android builds), and the server checks Access's signed header
   itself, so a request that skips Access gets nothing.
