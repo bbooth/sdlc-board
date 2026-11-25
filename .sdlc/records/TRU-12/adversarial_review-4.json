@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-12",
+  "round": 4,
+  "result": "pass",
+  "recorded_at": "2026-11-25T01:15:52.230Z",
+  "inputs": {
+    "branch": "feat/tru-12-deploy-web-access",
+    "commit": "ead32eb",
+    "verify_record": ".sdlc/records/TRU-12/verify-4.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-12/verify-4.json says pass at 9e5d653"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 9e5d653"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at ead32eb"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read ead32eb"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "1 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "0 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "0 blocking findings refuted, 1 minor carried to the PR"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "argocd/README.md:7: the README now drops the owner's Access, tunnel and service-token steps and says they live in homelab-infra#230, with `terraform output -raw board_client_id` / `board_client_secret` as the native app's credentials. homelab-infra's own history disagrees. Commit 0c3a9d7 says \"#230's apply was refused (403, auth.forbidden) creating the SDLC board's service token\", and it is still only on the unmerged branch claude/cloudflare-service-token-permission. In access.tf the board application depends on the board_app policy, and that policy depends on the token. So the AUD in deploy/values.yaml:9 only exists if a later apply worked, and nothing in this repo shows that one did. If it didn't, the owner follows the README and finds no service token. After sync, the cluster's end-to-end check of AC-8 (native app with a service token) fails, and the board_client_id output is missing. Before merge, confirm the apply and the outputs on Omarchy and note it in the PR, or keep a fallback step in the README.",
+      "status": "open",
+      "scope": "operability"
+    }
+  ],
+  "decision": "Open the PR and advance to PR review",
+  "evidence": []
+}
