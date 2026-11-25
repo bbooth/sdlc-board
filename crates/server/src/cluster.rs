@@ -62,10 +62,6 @@ impl Cluster {
         Self::new(&format!("https://{host}:{port}"), Some(dir.join("token")), Some(&ca), repos).map(Some)
     }
 
-    pub fn has_namespaces(&self) -> bool {
-        !self.namespaces.is_empty()
-    }
-
     pub async fn read(&self) -> RolloutRead {
         let mut read = RolloutRead::default();
         for (repo, ns) in &self.namespaces {
@@ -106,8 +102,9 @@ pub fn in_flight(obj: &Value) -> Option<Rollout> {
     let steps = obj["spec"]["strategy"]["canary"]["steps"].as_array()?;
     let index = status["currentStepIndex"].as_u64().unwrap_or(0) as usize;
     let aborted = status["abort"].as_bool() == Some(true);
-    // With traffic routing Argo reports the weight it set; without, it's the last setWeight reached.
-    let reached = || steps.iter().take(index + 1).filter_map(|s| s["setWeight"].as_u64()).next_back();
+    // With traffic routing Argo reports the weight it set; without, it's the
+    // last setWeight of the steps finished (the current one may still be scaling).
+    let reached = || steps.iter().take(index).filter_map(|s| s["setWeight"].as_u64()).next_back();
     let weight = status["canary"]["weights"]["canary"]["weight"].as_u64().or_else(reached).unwrap_or(0);
     let analysis = ["currentStepAnalysisRunStatus", "currentBackgroundAnalysisRunStatus"]
         .iter()
