@@ -1,4 +1,15 @@
-//! What the app draws, kept apart from the window so tests can render it.
+//! What the app draws, kept apart from the window so tests can render it,
+//! and the app itself, which the native, web and Android builds all start.
+
+mod app;
+mod settings;
+
+#[cfg(target_arch = "wasm32")]
+pub use app::run_web;
+pub use app::BoardApp;
+#[cfg(not(target_arch = "wasm32"))]
+pub use app::{get, run_native};
+pub use settings::Settings;
 
 use board_api::{Checks, Snapshot, Ticket};
 use eframe::egui;

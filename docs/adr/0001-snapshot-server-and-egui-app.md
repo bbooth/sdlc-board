@@ -21,6 +21,13 @@ web, to one person, and no client may hold a Linear or GitHub token.
     `target_arch` cfg, so `ureq` is native-only. The app's refresh logic (`board_app::Reads`)
     keeps time with `web_time::Instant`, which is std's natively and the
     browser's clock on wasm, where `std::time::Instant::now` panics.
+  - Amended by TRU-13: Android runs the app from its own crate,
+    `crates/android`, in a `NativeActivity` packaged by `cargo-apk`, and
+    fetches with `ureq` like the native build. Android builds eframe
+    without its `accesskit` feature, which doesn't build with the native
+    activity. `cargo-apk` is no longer developed; it needs no Java or
+    Gradle, and the APK has nothing but the library. If it stops building,
+    `xbuild` or a Gradle wrapper around `cargo-ndk` replaces it.
 - Access is Cloudflare Access (a browser login, or a service token from the
   native and Android builds), and the server checks Access's signed header
   itself, so a request that skips Access gets nothing.

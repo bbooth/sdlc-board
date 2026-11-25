@@ -20,6 +20,41 @@ jobs:
       - run: cargo clippy -p board-app --target wasm32-unknown-unknown --locked -- -D warnings
       - run: cargo test --workspace --locked
 
+  # The Android build (crates/android). GitHub-hosted, whose image carries
+  # the Android SDK and NDK. The APK is this run's sdlc-board-apk artifact.
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - run: rustup toolchain install stable --profile minimal --component clippy --target aarch64-linux-android && rustup default stable
+      - run: cargo install --locked cargo-apk --version 0.10.0
+      - run: cargo apk -- clippy -p board-android --locked -- -D warnings
+      # The release key (docs/STATUS.md). Without it, as on Dependabot PRs,
+      # a throwaway key signs the APK, which can't update an install signed with the real one.
+      - name: Signing key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          ks="$RUNNER_TEMP/release.jks"
+          if [ -n "$KEYSTORE" ]; then
+            echo "$KEYSTORE" | base64 -d > "$ks"
+          else
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: the APK is signed with a throwaway key."
+            PASSWORD=$(openssl rand -hex 16)
+            keytool -genkeypair -keystore "$ks" -storepass "$PASSWORD" -keypass "$PASSWORD" -alias board \
+              -keyalg RSA -keysize 2048 -validity 30 -dname CN=throwaway
+          fi
+          echo "CARGO_APK_RELEASE_KEYSTORE=$ks" >> "$GITHUB_ENV"
+          echo "CARGO_APK_RELEASE_KEYSTORE_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+      - run: cargo apk build -p board-android --release
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sdlc-board-apk
+          path: target/release/apk/sdlc-board.apk
+          if-no-files-found: error
+
   deploy:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 10
