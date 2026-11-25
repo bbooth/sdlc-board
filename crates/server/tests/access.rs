@@ -51,7 +51,10 @@ async fn board() -> (Router, Arc<AtomicUsize>) {
     let state = sources::State::new();
     let access = Access::with_certs(Settings { issuer: ISS.into(), aud: AUD.into() }, &url, state.clone()).unwrap();
     access.read_keys().await.unwrap();
-    let web = std::env::temp_dir().join(format!("board-web-{}", std::process::id()));
+    // One directory per call: the tests run in parallel, and rewriting a shared
+    // index.html could let another test read it empty.
+    static N: AtomicUsize = AtomicUsize::new(0);
+    let web = std::env::temp_dir().join(format!("board-web-{}-{}", std::process::id(), N.fetch_add(1, Relaxed)));
     std::fs::create_dir_all(&web).unwrap();
     std::fs::write(web.join("index.html"), "<canvas id=board></canvas>").unwrap();
     (routes::router(state, Some(Arc::new(access)), Some(web)), reads)
