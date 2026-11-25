@@ -216,3 +216,27 @@ fn github_times_read_as_unix_seconds() {
     assert_eq!(unix("2000-02-29T23:59:59Z"), Some(951_868_799));
     assert_eq!(unix("soon"), None);
 }
+
+#[tokio::test]
+async fn a_personal_token_beside_the_app_is_ignored_with_a_warning() {
+    #[derive(Clone, Default)]
+    struct Logs(Arc<Mutex<Vec<u8>>>);
+    impl std::io::Write for Logs {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(b);
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let (fake, state, logs) = (fake().await, sources::State::new(), Logs::default());
+    let writer = logs.clone();
+    let subscriber = tracing_subscriber::fmt().with_writer(move || writer.clone()).finish();
+    // Global, not scoped: other tests hit the same callsite from their own threads.
+    tracing::subscriber::set_global_default(subscriber).unwrap();
+    github(&fake, &["bbooth/secret"], &state);
+    let text = String::from_utf8(logs.0.lock().unwrap().clone()).unwrap();
+    assert!(text.contains("GITHUB_TOKEN is ignored: signing in as the GitHub App"), "{text}");
+    assert!(!text.contains("github_pat"), "{text}");
+}
