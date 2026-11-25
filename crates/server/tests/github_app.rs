@@ -223,6 +223,9 @@ async fn a_token_in_its_last_five_minutes_is_replaced_and_every_token_is_counted
     fake.mode.store(MINT_FAILS, Relaxed);
     let read = failing.prs().await;
     assert!(read.errors.is_empty() && read.prs.len() == 1, "{:?}", read.errors);
+    // and is tried once a minute, not once a request.
+    failing.prs().await;
+    assert_eq!(tokens(&state, "error"), "2");
 }
 
 #[tokio::test]

@@ -12,6 +12,8 @@ use tokio::sync::Mutex;
 
 /// A token this close to expiring is replaced before it's used.
 const MARGIN: i64 = 300;
+/// After a failed attempt, a token still live serves this long before the next try.
+const RETRY: i64 = 60;
 
 /// A token or key that prints as `[redacted]`, so no log or error shows it.
 #[derive(Clone)]
@@ -74,14 +76,16 @@ pub struct AppAuth {
     /// Each repo's own token: one scoped to a single repo, read-only, can
     /// reach nothing else if it leaks or a path names the wrong repo.
     tokens: Mutex<HashMap<String, (Secret, i64)>>,
+    /// When each repo's last failed attempt was, so an outage costs one try a minute, not one a request.
+    failed: Mutex<HashMap<String, i64>>,
 }
 
 impl AppAuth {
     /// `state` counts each attempt to get a token, in `board_github_app_tokens_total`.
     pub fn new(settings: Settings, endpoint: &str, state: Arc<State>) -> anyhow::Result<Self> {
         let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).user_agent("sdlc-board").build()?;
-        let (installations, tokens) = (Mutex::default(), Mutex::default());
-        Ok(Self { settings, endpoint: endpoint.into(), client, state, installations, tokens })
+        let (installations, tokens, failed) = (Mutex::default(), Mutex::default(), Mutex::default());
+        Ok(Self { settings, endpoint: endpoint.into(), client, state, installations, tokens, failed })
     }
 
     /// A live token for `repo` (`owner/name`). When a new one can't be got,
@@ -89,22 +93,28 @@ impl AppAuth {
     pub async fn token(&self, repo: &str) -> anyhow::Result<Secret> {
         let mut tokens = self.tokens.lock().await;
         let cached = tokens.get(repo).cloned();
-        if let Some((token, _)) = cached.as_ref().filter(|(_, expires)| *expires - MARGIN > now()) {
+        let live = cached.as_ref().filter(|(_, expires)| *expires > now());
+        let tried = self.failed.lock().await.get(repo).is_some_and(|at| now() - at < RETRY);
+        if let Some((token, _)) = live.filter(|(_, expires)| *expires - MARGIN > now() || tried) {
             return Ok(token.clone());
         }
         match self.fresh(repo).await {
             Ok((token, expires)) => {
+                self.failed.lock().await.remove(repo);
                 tracing::info!(repo, expires, "got a GitHub App installation token");
                 tokens.insert(repo.into(), (token.clone(), expires));
                 Ok(token)
             }
-            Err(e) => match cached.filter(|(_, expires)| *expires > now()) {
-                Some((token, expires)) => {
-                    tracing::warn!(repo, expires, error = %e, "getting a new GitHub App token failed; using the old one");
-                    Ok(token)
+            Err(e) => {
+                self.failed.lock().await.insert(repo.into(), now());
+                match live {
+                    Some((token, expires)) => {
+                        tracing::warn!(repo, expires, error = %e, "getting a new GitHub App token failed; using the old one");
+                        Ok(token.clone())
+                    }
+                    None => Err(e),
                 }
-                None => Err(e),
-            },
+            }
         }
     }
 
