@@ -14,7 +14,7 @@ use board_server::github_app::{unix, AppAuth, Settings};
 use board_server::sources::{self, Source};
 use jsonwebtoken::{decode, jwk::JwkSet, DecodingKey, Validation};
 use serde_json::{json, Value};
-use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering::Relaxed};
+use std::sync::atomic::{AtomicU64, AtomicU8, AtomicUsize, Ordering::Relaxed};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -23,15 +23,38 @@ const PKCS8: &str = include_str!("fixtures/access_test_key.pem");
 const CERTS: &str = include_str!("fixtures/access_test_certs.json");
 const APP_ID: &str = "42";
 
-/// Tokens minted expire long after the test, already, or minting fails.
+/// Tokens minted expire long after the test, already, in 200 or 400
+/// seconds; or minting fails, or the installation lookup does.
 const LONG: u8 = 0;
 const EXPIRED: u8 = 1;
 const MINT_FAILS: u8 = 2;
+const SOON: u8 = 3;
+const LATER: u8 = 4;
+const LOOKUP_FAILS: u8 = 5;
+/// The personal token the fake accepts for the private repo.
+const PAT: &str = "github_pat_real";
 
 struct Fake {
     url: String,
     mode: Arc<AtomicU8>,
     mints: Arc<AtomicUsize>,
+    /// The App's installation ID; reinstalling the App changes it.
+    installation: Arc<AtomicU64>,
+    /// Tokens GitHub has revoked before they expired.
+    revoked: Arc<Mutex<Vec<String>>>,
+}
+
+/// Unix seconds as GitHub writes them, `2026-11-25T20:00:00Z`.
+fn rfc3339(t: i64) -> String {
+    let (days, secs) = (t.div_euclid(86_400), t.rem_euclid(86_400));
+    let z = days + 719_468;
+    let (era, doe) = (z.div_euclid(146_097), z.rem_euclid(146_097));
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let (d, m) = (doy - (153 * mp + 2) / 5 + 1, if mp < 10 { mp + 3 } else { mp - 9 });
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", secs / 3600, secs / 60 % 60, secs % 60)
 }
 
 fn bearer(headers: &HeaderMap) -> String {
@@ -50,25 +73,38 @@ fn app_jwt_ok(headers: &HeaderMap) -> bool {
 
 async fn fake() -> Fake {
     let (mode, mints) = (Arc::new(AtomicU8::new(LONG)), Arc::new(AtomicUsize::new(0)));
-    let live: Arc<Mutex<Vec<String>>> = Arc::default();
+    let (installed, revoked) = (Arc::new(AtomicU64::new(7)), Arc::<Mutex<Vec<String>>>::default());
+    let live = Arc::new(Mutex::new(vec![PAT.to_string()]));
     let (m, n, l) = (mode.clone(), mints.clone(), live.clone());
-    let installation = |Path((owner, repo)): Path<(String, String)>, h: HeaderMap| async move {
+    let (m2, i1, i2, r) = (mode.clone(), installed.clone(), installed.clone(), revoked.clone());
+    let installation = move |Path((owner, repo)): Path<(String, String)>, h: HeaderMap| async move {
         if !app_jwt_ok(&h) {
             return StatusCode::UNAUTHORIZED.into_response();
         }
-        match (owner.as_str(), repo.as_str()) {
-            ("bbooth", "secret") => Json(json!({ "id": 7 })).into_response(),
+        match (m2.load(Relaxed), owner.as_str(), repo.as_str()) {
+            (LOOKUP_FAILS, ..) => StatusCode::BAD_GATEWAY.into_response(),
+            (_, "bbooth", "secret") => Json(json!({ "id": i1.load(Relaxed) })).into_response(),
             _ => StatusCode::NOT_FOUND.into_response(),
         }
     };
-    let mint = move |Path(id): Path<u64>, h: HeaderMap| async move {
-        if !app_jwt_ok(&h) || id != 7 {
+    let mint = move |Path(id): Path<u64>, h: HeaderMap, Json(scope): Json<Value>| async move {
+        if !app_jwt_ok(&h) {
             return StatusCode::UNAUTHORIZED.into_response();
+        }
+        if id != i2.load(Relaxed) {
+            return StatusCode::NOT_FOUND.into_response();
+        }
+        // Each token is for the one repo, read-only.
+        let read = json!({"checks": "read", "contents": "read", "metadata": "read", "pull_requests": "read"});
+        if scope != json!({ "repositories": ["secret"], "permissions": read }) {
+            return StatusCode::UNPROCESSABLE_ENTITY.into_response();
         }
         let expires = match m.load(Relaxed) {
             MINT_FAILS => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-            EXPIRED => "2000-01-01T00:00:00Z",
-            _ => "2999-01-01T00:00:00Z",
+            EXPIRED => "2000-01-01T00:00:00Z".into(),
+            SOON => rfc3339(sources::now() + 200),
+            LATER => rfc3339(sources::now() + 400),
+            _ => "2999-01-01T00:00:00Z".into(),
         };
         let token = format!("ghs_secret{}", n.fetch_add(1, Relaxed));
         l.lock().unwrap().push(token.clone());
@@ -76,6 +112,9 @@ async fn fake() -> Fake {
     };
     // A private repo is "not found" to anyone without a live installation token.
     let private = move |h: &HeaderMap, ok: Value| -> Response {
+        if r.lock().unwrap().contains(&bearer(h)) {
+            return StatusCode::UNAUTHORIZED.into_response();
+        }
         if !live.lock().unwrap().contains(&bearer(h)) {
             return StatusCode::NOT_FOUND.into_response();
         }
@@ -106,7 +145,7 @@ async fn fake() -> Fake {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    Fake { url, mode, mints }
+    Fake { url, mode, mints, installation: installed, revoked }
 }
 
 fn repo(name: &str) -> Repo {
@@ -146,32 +185,98 @@ async fn a_private_repo_reads_as_the_app_every_minute() {
 }
 
 #[tokio::test]
-async fn an_expiring_token_is_replaced_and_every_token_is_counted() {
+async fn a_token_in_its_last_five_minutes_is_replaced_and_every_token_is_counted() {
     let (fake, state) = (fake().await, sources::State::new());
     let github = github(&fake, &["bbooth/secret"], &state);
-    // A token inside its last five minutes is replaced before the next request.
-    fake.mode.store(EXPIRED, Relaxed);
-    github.prs().await;
-    fake.mode.store(LONG, Relaxed);
-    let read = github.prs().await;
-    assert!(read.errors.is_empty() && read.prs.len() == 1, "{:?}", read.errors);
-    // A live token is kept: the second read's token served the third.
-    assert!(github.prs().await.errors.is_empty());
-    let mints = fake.mints.load(Relaxed);
-    assert!(mints >= 2 && tokens(&state, "ok") == mints.to_string(), "{mints} vs {}", tokens(&state, "ok"));
-    let before = mints;
-    github.prs().await;
-    assert_eq!(fake.mints.load(Relaxed), before);
+    let read_and_mints = || async {
+        let read = github.prs().await;
+        assert!(read.errors.is_empty() && read.prs.len() == 1, "{:?}", read.errors);
+        fake.mints.load(Relaxed)
+    };
+    // 400 s left is kept; 200 s left is inside the margin, so the next request replaces it.
+    fake.mode.store(LATER, Relaxed);
+    assert_eq!(read_and_mints().await, 1);
+    assert_eq!(read_and_mints().await, 1, "a token with 400 s left is kept");
+    let (fake2, state2) = (self::fake().await, sources::State::new());
+    fake2.mode.store(SOON, Relaxed);
+    let soon = self::github(&fake2, &["bbooth/secret"], &state2);
+    soon.prs().await;
+    let first = fake2.mints.load(Relaxed);
+    fake2.mode.store(LONG, Relaxed);
+    soon.prs().await;
+    assert!(fake2.mints.load(Relaxed) > first, "a token with 200 s left is replaced");
+    assert_eq!(tokens(&state2, "ok"), fake2.mints.load(Relaxed).to_string());
+    let kept = fake2.mints.load(Relaxed);
+    soon.prs().await;
+    assert_eq!(fake2.mints.load(Relaxed), kept, "a live token is kept");
+    assert_eq!(tokens(&state, "ok"), "1");
 
-    // A failed mint fails that read and is counted.
+    // A failed mint with no live token fails that read and is counted; the next read tries again.
     let (fake, state) = (self::fake().await, sources::State::new());
     fake.mode.store(MINT_FAILS, Relaxed);
     let failing = self::github(&fake, &["bbooth/secret"], &state);
-    let read = failing.prs().await;
-    assert_eq!(read.repos_failed, ["bbooth/secret"]);
+    assert_eq!(failing.prs().await.repos_failed, ["bbooth/secret"]);
     assert_eq!(tokens(&state, "error"), "1");
-    fake.mode.store(LONG, Relaxed);
+    fake.mode.store(SOON, Relaxed);
     assert!(failing.prs().await.errors.is_empty(), "the next read tries again");
+    // A token inside its margin but not expired still serves while minting fails.
+    fake.mode.store(MINT_FAILS, Relaxed);
+    let read = failing.prs().await;
+    assert!(read.errors.is_empty() && read.prs.len() == 1, "{:?}", read.errors);
+}
+
+#[tokio::test]
+async fn a_failed_lookup_counts_and_a_reinstalled_or_revoked_app_recovers() {
+    // A wrong App ID: GitHub rejects the JWT at the lookup, before any mint.
+    let (fake, state) = (fake().await, sources::State::new());
+    let wrong = Settings::from_values(Some("43"), Some(KEY)).unwrap().unwrap();
+    let app = AppAuth::new(wrong, &fake.url, state.clone()).unwrap();
+    let github = GitHub::new(&fake.url, None, vec![repo("bbooth/secret")]).unwrap().with_app(app);
+    assert_eq!(github.prs().await.repos_failed, ["bbooth/secret"]);
+    assert_eq!(tokens(&state, "error"), "1");
+    // A lookup that fails on GitHub's side counts too; "not installed" doesn't.
+    let (fake, state) = (self::fake().await, sources::State::new());
+    let github = self::github(&fake, &["bbooth/secret", "bbooth/elsewhere"], &state);
+    fake.mode.store(LOOKUP_FAILS, Relaxed);
+    github.prs().await;
+    assert_eq!(tokens(&state, "error"), "2");
+    fake.mode.store(LONG, Relaxed);
+    let read = github.prs().await;
+    assert_eq!(
+        (read.repos_failed.as_slice(), tokens(&state, "error")),
+        (["bbooth/elsewhere".to_string()].as_slice(), "2".into())
+    );
+
+    // Reinstalled: the old installation's mint is 404, and the read after looks it up again.
+    let (fake, state) = (self::fake().await, sources::State::new());
+    fake.mode.store(EXPIRED, Relaxed);
+    let github = self::github(&fake, &["bbooth/secret"], &state);
+    github.prs().await;
+    fake.installation.store(8, Relaxed);
+    let read = github.prs().await;
+    assert!(read.errors[0].contains("looked up again next read"), "{:?}", read.errors);
+    fake.mode.store(LONG, Relaxed);
+    assert!(github.prs().await.errors.is_empty(), "recovers without a restart");
+
+    // Revoked before it expired: a 401 drops it, and the next read gets a new one.
+    let before = fake.mints.load(Relaxed);
+    let live = format!("ghs_secret{}", before - 1);
+    fake.revoked.lock().unwrap().push(live);
+    github.prs().await;
+    let read = github.prs().await;
+    assert!(read.errors.is_empty() && fake.mints.load(Relaxed) > before, "{:?}", read.errors);
+}
+
+#[tokio::test]
+async fn without_an_app_the_personal_token_is_sent() {
+    let fake = fake().await;
+    let github = GitHub::new(&fake.url, Some(PAT.into()), vec![repo("bbooth/secret")]).unwrap();
+    assert!(matches!(github.auth(), Auth::Token(_)));
+    let read = github.prs().await;
+    assert!(read.errors.is_empty() && read.prs.len() == 1, "{:?}", read.errors);
+    assert_eq!(github.interval(), sources::INTERVAL);
+    let tokenless = GitHub::new(&fake.url, None, vec![repo("bbooth/secret")]).unwrap();
+    assert_eq!(tokenless.prs().await.repos_failed, ["bbooth/secret"], "a private repo is not found without one");
 }
 
 #[tokio::test]
@@ -213,6 +318,7 @@ fn bad_app_settings_name_the_setting_and_never_the_key() {
 #[test]
 fn github_times_read_as_unix_seconds() {
     assert_eq!(unix("2026-11-25T20:00:00Z"), Some(1_795_636_800));
+    assert_eq!(rfc3339(951_868_799), "2000-02-29T23:59:59Z");
     assert_eq!(unix("2000-02-29T23:59:59Z"), Some(951_868_799));
     assert_eq!(unix("soon"), None);
 }

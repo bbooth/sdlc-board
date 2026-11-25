@@ -71,50 +71,87 @@ pub struct AppAuth {
     /// Each repo's installation; a repo the App isn't on is looked up again
     /// next time, so installing it later needs no restart.
     installations: Mutex<HashMap<String, u64>>,
-    tokens: Mutex<HashMap<u64, (Secret, i64)>>,
+    /// Each repo's own token: one scoped to a single repo, read-only, can
+    /// reach nothing else if it leaks or a path names the wrong repo.
+    tokens: Mutex<HashMap<String, (Secret, i64)>>,
 }
 
 impl AppAuth {
-    /// `state` counts each token got, in `board_github_app_tokens_total`.
+    /// `state` counts each attempt to get a token, in `board_github_app_tokens_total`.
     pub fn new(settings: Settings, endpoint: &str, state: Arc<State>) -> anyhow::Result<Self> {
         let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).user_agent("sdlc-board").build()?;
         let (installations, tokens) = (Mutex::default(), Mutex::default());
         Ok(Self { settings, endpoint: endpoint.into(), client, state, installations, tokens })
     }
 
-    /// A live token for `repo` (`owner/name`).
+    /// A live token for `repo` (`owner/name`). When a new one can't be got,
+    /// the old one serves until it actually expires.
     pub async fn token(&self, repo: &str) -> anyhow::Result<Secret> {
-        let installation = self.installation(repo).await?;
         let mut tokens = self.tokens.lock().await;
-        if let Some((token, _)) = tokens.get(&installation).filter(|(_, expires)| *expires - MARGIN > now()) {
+        let cached = tokens.get(repo).cloned();
+        if let Some((token, _)) = cached.as_ref().filter(|(_, expires)| *expires - MARGIN > now()) {
             return Ok(token.clone());
         }
-        let got = self.mint(installation).await;
-        self.state.metrics.app_token(got.is_ok());
-        let (token, expires) = got?;
-        tracing::info!(installation, expires, "got a GitHub App installation token");
-        tokens.insert(installation, (token.clone(), expires));
-        Ok(token)
+        match self.fresh(repo).await {
+            Ok((token, expires)) => {
+                tracing::info!(repo, expires, "got a GitHub App installation token");
+                tokens.insert(repo.into(), (token.clone(), expires));
+                Ok(token)
+            }
+            Err(e) => match cached.filter(|(_, expires)| *expires > now()) {
+                Some((token, expires)) => {
+                    tracing::warn!(repo, expires, error = %e, "getting a new GitHub App token failed; using the old one");
+                    Ok(token)
+                }
+                None => Err(e),
+            },
+        }
     }
 
-    async fn installation(&self, repo: &str) -> anyhow::Result<u64> {
+    /// Drops `repo`'s token, after GitHub rejected it before it expired.
+    pub async fn forget(&self, repo: &str) {
+        self.tokens.lock().await.remove(repo);
+    }
+
+    /// Every failure to get a token counts as an error, except a repo the App isn't on.
+    async fn fresh(&self, repo: &str) -> anyhow::Result<(Secret, i64)> {
+        let got = match self.installation(repo).await {
+            Ok(Some(installation)) => self.mint(repo, installation).await,
+            Ok(None) => anyhow::bail!("the GitHub App isn't installed on {repo}"),
+            Err(e) => Err(e),
+        };
+        self.state.metrics.app_token(got.is_ok());
+        got
+    }
+
+    async fn installation(&self, repo: &str) -> anyhow::Result<Option<u64>> {
         if let Some(id) = self.installations.lock().await.get(repo) {
-            return Ok(*id);
+            return Ok(Some(*id));
         }
         let path = format!("/repos/{repo}/installation");
         let resp = self.app_request(self.client.get(format!("{}{path}", self.endpoint)), &path).await?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
-            anyhow::bail!("the GitHub App isn't installed on {repo}");
+            return Ok(None);
         }
         let body: Value = resp.error_for_status().map_err(|e| anyhow::anyhow!("GitHub {path}: {e}"))?.json().await?;
         let id = body["id"].as_u64().ok_or_else(|| anyhow::anyhow!("GitHub {path}: no installation id"))?;
         self.installations.lock().await.insert(repo.into(), id);
-        Ok(id)
+        Ok(Some(id))
     }
 
-    async fn mint(&self, installation: u64) -> anyhow::Result<(Secret, i64)> {
+    async fn mint(&self, repo: &str, installation: u64) -> anyhow::Result<(Secret, i64)> {
         let path = format!("/app/installations/{installation}/access_tokens");
-        let resp = self.app_request(self.client.post(format!("{}{path}", self.endpoint)), &path).await?;
+        let name = repo.split_once('/').map_or(repo, |(_, name)| name);
+        let read = "read";
+        let scope = serde_json::json!({ "repositories": [name], "permissions":
+            { "checks": read, "contents": read, "metadata": read, "pull_requests": read } });
+        let req = self.client.post(format!("{}{path}", self.endpoint)).json(&scope);
+        let resp = self.app_request(req, &path).await?;
+        if matches!(resp.status().as_u16(), 401 | 404) {
+            // Reinstalling the App gives it a new installation ID: look it up again next read.
+            self.installations.lock().await.remove(repo);
+            anyhow::bail!("GitHub {path}: {} (the installation is looked up again next read)", resp.status());
+        }
         // The status says enough; the body isn't echoed in case it holds a token.
         let body: Value = resp.error_for_status().map_err(|e| anyhow::anyhow!("GitHub {path}: {e}"))?.json().await?;
         let token = body["token"].as_str().ok_or_else(|| anyhow::anyhow!("GitHub {path}: no token"))?;

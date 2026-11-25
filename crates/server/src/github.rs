@@ -123,16 +123,19 @@ impl GitHub {
         let e = |err: reqwest::Error| anyhow::anyhow!("GitHub {path}: {err}");
         let mut req = self.client.get(format!("{}{path}", self.endpoint)).query(query);
         req = req.header("Accept", "application/vnd.github.raw+json");
+        // Every path is under `/repos/owner/name/`, the repo whose token signs it.
+        let repo =
+            path.strip_prefix("/repos/").unwrap_or_default().splitn(3, '/').take(2).collect::<Vec<_>>().join("/");
         match &self.auth {
             Auth::None => {}
             Auth::Token(t) => req = req.bearer_auth(t),
-            // Every path is under `/repos/owner/name/`, the repo whose installation signs it.
-            Auth::App(app) => {
-                let repo = path.strip_prefix("/repos/").unwrap_or_default().splitn(3, '/').take(2);
-                req = req.bearer_auth(app.token(&repo.collect::<Vec<_>>().join("/")).await?.expose());
-            }
+            Auth::App(app) => req = req.bearer_auth(app.token(&repo).await?.expose()),
         }
         let resp = req.send().await.map_err(e)?;
+        if let (Auth::App(app), reqwest::StatusCode::UNAUTHORIZED) = (&self.auth, resp.status()) {
+            // Revoked early (suspended, permissions changed): the next request gets a new one.
+            app.forget(&repo).await;
+        }
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
