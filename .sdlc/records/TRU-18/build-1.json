@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-18",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-25T19:40:09.110Z",
+  "inputs": {
+    "branch": "feat/tru-18-github-app",
+    "commit": "76fbf1e"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-18-github-app"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "9 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "2 test files changed with 5 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "369 lines changed, counting 269 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 76fbf1e"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "1 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/github.rs:93: the AC-5 warning that GITHUB_TOKEN is ignored when the App is set has no test. crates/server/tests/github_app.rs:138 checks only that `auth()` is `Auth::App`, so deleting or rewording the `tracing::warn!` in `with_app` would leave every test green. The behaviour is correct; the rest of AC-5 is covered by the existing token and tokenless tests in tests/github.rs and tests/sources.rs."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
