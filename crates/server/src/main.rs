@@ -1,4 +1,4 @@
-use board_server::{access::Access, config::Config, github, linear, routes, sources};
+use board_server::{access::Access, config::Config, github, github_app, linear, routes, sources};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -31,10 +31,18 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(sources::run(state.clone(), linear));
     let gh_endpoint = std::env::var("GITHUB_ENDPOINT").unwrap_or_else(|_| github::ENDPOINT.into());
     let token = std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty());
-    if token.is_none() {
+    let env = |name| std::env::var(name).ok();
+    let app =
+        github_app::Settings::from_values(env("GITHUB_APP_ID").as_deref(), env("GITHUB_APP_PRIVATE_KEY").as_deref())?;
+    if token.is_none() && app.is_none() {
         tracing::warn!("GITHUB_TOKEN is not set: reading public repos only as often as 45 requests an hour allows");
     }
-    let github = github::GitHub::new(&gh_endpoint, token, config.repos.clone())?;
+    let mut github = github::GitHub::new(&gh_endpoint, token, config.repos.clone())?;
+    if let Some(app) = app {
+        tracing::info!(app_id = app.app_id, "reading GitHub as the GitHub App");
+        state.metrics.touch_app_tokens();
+        github = github.with_app(github_app::AppAuth::new(app, &gh_endpoint, state.clone())?);
+    }
     tokio::spawn(sources::run(state.clone(), github));
     let web = std::env::var("BOARD_WEB_DIR").ok().map(Into::into);
     let listen = config.listen.as_deref().unwrap_or("0.0.0.0:8080");

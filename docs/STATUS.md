@@ -45,6 +45,18 @@
   setup in `argocd/README.md`), and CI pushes `ghcr.io/bbooth/sdlc-board`
   from `main`.
 
+- TRU-18 (part of TRU-17): the server can sign in to GitHub as a
+  read-only GitHub App, so private repos' checks show. Set
+  `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` (the App's PEM key); it
+  then reads every minute, gets an installation token for each repo the
+  App is on and replaces it in its last five minutes. A repo the App isn't
+  installed on fails alone ("the GitHub App isn't installed on ..."). One
+  setting without the other, or a key that doesn't parse, stops the server
+  at start. With the App set, `GITHUB_TOKEN` is ignored with a warning;
+  without it, the token or tokenless reads work as before.
+  `board_github_app_tokens_total{result}` counts the tokens got. The chart
+  and the App's one-time setup come in TRU-19.
+
 ## Next
 
 - TRU-13 (Android) and TRU-14 (rollouts).

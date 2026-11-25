@@ -1,5 +1,6 @@
 use crate::config::Repo;
 use crate::gates;
+use crate::github_app::AppAuth;
 use board_api::{Checks, Gate, Pr};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
@@ -49,11 +50,21 @@ pub struct PrRead {
     pub repos_failed: Vec<String>,
 }
 
+/// How the server signs in to GitHub.
+pub enum Auth {
+    /// Public repos only, within the tokenless budget.
+    None,
+    /// A personal token.
+    Token(String),
+    /// A GitHub App's installation tokens, which can read private repos.
+    App(Box<AppAuth>),
+}
+
 /// Reads each repo's PRs, their checks and their gate records.
 pub struct GitHub {
     client: reqwest::Client,
     endpoint: String,
-    token: Option<String>,
+    auth: Auth,
     repos: Vec<Repo>,
     /// Requests sent since the interval was last worked out, and in this read.
     requests: AtomicU64,
@@ -72,7 +83,20 @@ impl GitHub {
         let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).user_agent("sdlc-board").build()?;
         let (requests, this_read, last) = (AtomicU64::new(0), AtomicU64::new(0), Mutex::default());
         let budget = UNAUTHENTICATED_BUDGET;
-        Ok(Self { client, endpoint: endpoint.into(), token, repos, requests, this_read, budget, last })
+        let auth = token.map_or(Auth::None, Auth::Token);
+        Ok(Self { client, endpoint: endpoint.into(), auth, repos, requests, this_read, budget, last })
+    }
+
+    /// Signs in as the App instead; a personal token is then ignored.
+    pub fn with_app(self, app: AppAuth) -> Self {
+        if matches!(self.auth, Auth::Token(_)) {
+            tracing::warn!("GITHUB_TOKEN is ignored: signing in as the GitHub App");
+        }
+        Self { auth: Auth::App(Box::new(app)), ..self }
+    }
+
+    pub fn auth(&self) -> &Auth {
+        &self.auth
     }
 
     /// Spends at most `per_hour` requests an hour without a token.
@@ -83,7 +107,7 @@ impl GitHub {
     /// Without a token, long enough that reads like the ones since the last call fit the budget.
     pub fn interval(&self) -> Duration {
         let spent = self.requests.swap(0, Ordering::Relaxed);
-        if self.token.is_some() {
+        if !matches!(self.auth, Auth::None) {
             return crate::sources::INTERVAL;
         }
         crate::sources::INTERVAL.max(Duration::from_secs(spent * 3600 / self.budget))
@@ -92,15 +116,21 @@ impl GitHub {
     /// GETs an API path; `None` when it doesn't exist. The raw media type
     /// returns a file's own contents and the usual JSON for everything else.
     async fn get(&self, path: &str, query: &[(&str, &str)]) -> anyhow::Result<Option<Value>> {
-        if self.token.is_none() && self.this_read.fetch_add(1, Ordering::Relaxed) >= self.budget {
+        if matches!(self.auth, Auth::None) && self.this_read.fetch_add(1, Ordering::Relaxed) >= self.budget {
             anyhow::bail!("GitHub {path}: not sent, this read used its {} requests", self.budget);
         }
         self.requests.fetch_add(1, Ordering::Relaxed);
         let e = |err: reqwest::Error| anyhow::anyhow!("GitHub {path}: {err}");
         let mut req = self.client.get(format!("{}{path}", self.endpoint)).query(query);
         req = req.header("Accept", "application/vnd.github.raw+json");
-        if let Some(t) = &self.token {
-            req = req.bearer_auth(t);
+        match &self.auth {
+            Auth::None => {}
+            Auth::Token(t) => req = req.bearer_auth(t),
+            // Every path is under `/repos/owner/name/`, the repo whose installation signs it.
+            Auth::App(app) => {
+                let repo = path.strip_prefix("/repos/").unwrap_or_default().splitn(3, '/').take(2);
+                req = req.bearer_auth(app.token(&repo.collect::<Vec<_>>().join("/")).await?.expose());
+            }
         }
         let resp = req.send().await.map_err(e)?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
