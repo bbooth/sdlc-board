@@ -2,6 +2,7 @@
 name = "bbooth/booking"
 linear_team = "TRU"
 linear_project = "Booking"
+rollout_namespace = "booking"
 
 
 [[repos]]

@@ -45,6 +45,18 @@
   setup in `argocd/README.md`), and CI pushes `ghcr.io/bbooth/sdlc-board`
   from `main`.
 
+- TRU-14: the server also reads the Argo Rollouts in each repo's
+  `rollout_namespace` (`board.toml`; `rolloutNamespace` in the chart's
+  values, booking's is `booking`) every minute, through the pod's
+  ServiceAccount, which may only get and list Rollouts there
+  (`deploy/templates/rbac.yaml`). A canary whose new version isn't stable
+  yet shows on the card of each of its repo's tickets being rolled out
+  (Stage Rollout, or merged and still in PR review): its step, weight,
+  phase and analysis. Images are tagged `latest`, so two tickets merged
+  close together both show it. A local run reads `KUBE_ENDPOINT` (e.g.
+  `kubectl proxy`) without a token; without it, or a cluster, rollouts
+  aren't read.
+
 - TRU-13: the Android build, `crates/android`, starts the same app in a
   native activity. On first start it asks for the board's address and an
   Access service token (client ID and secret) and keeps them in the app's
@@ -59,4 +71,4 @@
 
 ## Next
 
-- TRU-14 (rollouts).
+- TRU-17 (read GitHub as a GitHub App).

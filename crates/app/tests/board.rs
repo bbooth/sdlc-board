@@ -139,3 +139,20 @@ fn an_unknown_check_state_reads_as_unknown() {
     let pr: Pr = serde_json::from_str(r#"{"number": 1, "title": "t", "url": "u", "checks": "neutral"}"#).unwrap();
     assert_eq!(pr.checks, Checks::Unknown);
 }
+
+const ROLLOUT: &str = r#"{"generated_at": 0, "sources": [], "columns": [{"stage": "Rollout", "tickets": [
+  {"id": "TRU-6", "title": "a", "url": "u", "repo": "r", "stage": "Rollout", "children": [], "rollouts": [
+    {"name": "web", "step": 2, "steps": 5, "weight": 20, "phase": "Paused", "analysis": "Running"},
+    {"name": "identity", "step": 1, "steps": 3, "weight": 0, "phase": "Aborted"}]},
+  {"id": "TRU-7", "title": "b", "url": "u", "repo": "r", "stage": "Rollout", "children": []}]}]}"#;
+
+// AC-4, app side: a card shows each of its rollouts in flight with its
+// canary step, weight and analysis; a card with none shows no rollout.
+#[test]
+fn a_card_shows_its_rollouts_step_weight_and_analysis() {
+    let snap: Snapshot = serde_json::from_str(ROLLOUT).unwrap();
+    let harness = Harness::new_ui(|ui| board_app::board(ui, &snap, 0));
+    harness.get_by_label("web: step 2 of 5 at 20%, Paused, analysis Running");
+    harness.get_by_label("identity: step 1 of 3 at 0%, Aborted");
+    assert_eq!(harness.query_all_by_label_contains(": step ").count(), 2);
+}

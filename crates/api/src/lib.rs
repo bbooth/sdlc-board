@@ -52,6 +52,9 @@ pub struct Ticket {
     pub gate: Option<Gate>,
     #[serde(default)]
     pub pr: Option<Pr>,
+    /// Canary rollouts in flight that release this ticket.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rollouts: Vec<Rollout>,
 }
 
 // Fields added to /v1 later carry #[serde(default)], so an app can read an
@@ -77,6 +80,25 @@ pub struct Pr {
     pub checks: Checks,
     #[serde(default)]
     pub merged: bool,
+}
+
+/// An Argo canary rollout that hasn't finished: a new version is partway
+/// out, paused, or aborted back to the stable one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Rollout {
+    /// The Rollout's name, e.g. `web`.
+    pub name: String,
+    /// The canary step it's on, counted from 1, of `steps`.
+    pub step: u32,
+    pub steps: u32,
+    /// Percent of traffic on the new version.
+    pub weight: u32,
+    /// Argo's phase (`Progressing`, `Paused`, `Degraded`), or `Aborted`.
+    pub phase: String,
+    /// The state of its latest analysis run (`Running`, `Successful`,
+    /// `Failed`, `Error`, `Inconclusive`), if one has started.
+    #[serde(default)]
+    pub analysis: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,0 +1,32 @@
+# Read-only access to Argo Rollouts, bound only in the namespaces board.toml
+# names, so the board can see a canary's progress and nothing else.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sdlc-board
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sdlc-board-rollouts-reader
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["rollouts"]
+    verbs: ["get", "list"]
+{{- range $ns := .Values.repos | include "sdlc-board.rolloutNamespaces" | fromJsonArray }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sdlc-board-rollouts-reader
+  namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: sdlc-board-rollouts-reader
+subjects:
+  - kind: ServiceAccount
+    name: sdlc-board
+    namespace: {{ $.Release.Namespace }}
+{{- end }}

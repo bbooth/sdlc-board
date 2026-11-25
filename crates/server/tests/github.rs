@@ -104,7 +104,12 @@ async fn fake_github() -> (String, Arc<AtomicU8>) {
 }
 
 fn repo() -> Repo {
-    Repo { name: "bbooth/booking".into(), linear_team: "TRU".into(), linear_project: "Booking".into() }
+    Repo {
+        name: "bbooth/booking".into(),
+        linear_team: "TRU".into(),
+        linear_project: "Booking".into(),
+        rollout_namespace: None,
+    }
 }
 
 fn gate(stage: &str, round: u32, pass: bool, at: &str) -> Gate {
@@ -177,7 +182,7 @@ async fn a_card_shows_the_latest_gate_from_its_comments_or_its_branch_and_its_pr
         issue("TRU-10", &[(1, "### Gate: Spec approval (fail) · round 1"), (2, "### Gate: Spec (pass) · round 2")]),
         issue("TRU-12", &[(1, "### Gate: Spec (pass) · round 1"), (2, "### Gate: Spec approval (pass) · round 1")]),
     ];
-    let cols = board::columns(&issues, &prs);
+    let cols = board::columns(&issues, &prs, &[]);
     let tickets = &cols.iter().find(|c| c.stage == "PR review").unwrap().tickets;
     let card = |id: &str| tickets.iter().find(|t| t.id == id).unwrap();
 

@@ -21,14 +21,19 @@ async fn fake_linear() -> String {
 }
 
 fn repo() -> Repo {
-    Repo { name: "bbooth/booking".into(), linear_team: "TRU".into(), linear_project: "Booking".into() }
+    Repo {
+        name: "bbooth/booking".into(),
+        linear_team: "TRU".into(),
+        linear_project: "Booking".into(),
+        rollout_namespace: None,
+    }
 }
 
 #[tokio::test]
 async fn open_tickets_land_once_in_their_stage_with_sub_tickets_nested() {
     let endpoint = fake_linear().await;
     let issues = Linear::new(&endpoint, "test-key", vec![repo()]).unwrap().issues().await.unwrap();
-    let cols = board::columns(&issues, &[]);
+    let cols = board::columns(&issues, &[], &[]);
 
     let stages: Vec<&str> = cols.iter().map(|c| c.stage.as_str()).collect();
     assert_eq!(stages, board_api::STAGES);

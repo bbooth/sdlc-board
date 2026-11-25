@@ -8,11 +8,13 @@ access:
   issuer: https://ancient-band-e5e4.cloudflareaccess.com
   aud: 67892c96e1096e4b477ad821bf4d4b08933e8fc44d56a1a3d7d254eea685e35b
 
-# board.toml's repos.
+# board.toml's repos. rolloutNamespace is where a repo's Argo Rollouts
+# run; the board may read Rollouts there (rbac.yaml).
 repos:
   - name: bbooth/booking
     linearTeam: TRU
     linearProject: Booking
+    rolloutNamespace: booking
   - name: bbooth/sdlc-board
     linearTeam: TRU
     linearProject: SDLC board
