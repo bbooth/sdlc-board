@@ -157,7 +157,8 @@ fn children(ui: &mut egui::Ui, t: &Ticket, depth: usize) {
     }
 }
 
-/// The ticket's latest gate and its PR with the state of its checks.
+/// The ticket's latest gate, its PR with the state of its checks, and its
+/// rollouts in flight.
 fn details(ui: &mut egui::Ui, t: &Ticket) {
     if let Some(g) = &t.gate {
         ui.small(format!("{} round {}: {}", g.stage, g.round, if g.pass { "pass" } else { "fail" }));
@@ -171,5 +172,13 @@ fn details(ui: &mut egui::Ui, t: &Ticket) {
             (_, Checks::Unknown) => "checks unknown",
         };
         ui.hyperlink_to(format!("PR #{} {state}", pr.number), &pr.url);
+    }
+    for r in &t.rollouts {
+        let analysis = r.analysis.as_ref().map_or(String::new(), |a| format!(", analysis {a}"));
+        let text = format!("{}: step {} of {} at {}%, {}{analysis}", r.name, r.step, r.steps, r.weight, r.phase);
+        let failing = matches!(r.phase.as_str(), "Aborted" | "Degraded")
+            || matches!(r.analysis.as_deref(), Some("Failed" | "Error" | "Inconclusive"));
+        let color = if failing { ui.visuals().error_fg_color } else { ui.visuals().text_color() };
+        ui.add(egui::Label::new(egui::RichText::new(text).small().color(color)).wrap());
     }
 }

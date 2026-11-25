@@ -1,4 +1,4 @@
-use board_server::{access::Access, config::Config, github, linear, routes, sources};
+use board_server::{access::Access, cluster::Cluster, config::Config, github, linear, routes, sources};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -36,6 +36,15 @@ async fn main() -> anyhow::Result<()> {
     }
     let github = github::GitHub::new(&gh_endpoint, token, config.repos.clone())?;
     tokio::spawn(sources::run(state.clone(), github));
+    // A cluster that can't be read loses only the rollouts, not the board.
+    let wanted = config.repos.iter().any(|r| r.rollout_namespace.is_some());
+    match Cluster::from_env(&config.repos) {
+        Ok(Some(cluster)) if wanted => drop(tokio::spawn(sources::run(state.clone(), cluster))),
+        Ok(Some(_)) => tracing::warn!("no repo in {path} has a rollout_namespace: rollouts are not read"),
+        Ok(None) if wanted => tracing::warn!("not in a cluster and KUBE_ENDPOINT is not set: rollouts are not read"),
+        Ok(None) => {}
+        Err(e) => tracing::error!(error = %e, "can't reach the cluster's API: rollouts are not read"),
+    }
     let web = std::env::var("BOARD_WEB_DIR").ok().map(Into::into);
     let listen = config.listen.as_deref().unwrap_or("0.0.0.0:8080");
     let metrics_listen = config.metrics_listen.as_deref().unwrap_or("0.0.0.0:9091");

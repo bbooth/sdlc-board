@@ -3,6 +3,7 @@
 
 pub mod access;
 pub mod board;
+pub mod cluster;
 pub mod config;
 pub mod gates;
 pub mod github;

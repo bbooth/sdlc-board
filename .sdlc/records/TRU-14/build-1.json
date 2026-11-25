@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-14",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-25T19:18:42.250Z",
+  "inputs": {
+    "branch": "feat/tru-14-rollouts",
+    "commit": "69a9cb7"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-14-rollouts"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "23 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "7 test files changed with 8 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "413 lines changed, counting 221 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 69a9cb7"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "3 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "board.toml:1-4: the checked-in config gives bbooth/booking no rollout_namespace, so the local run that docs/STATUS.md describes (KUBE_ENDPOINT through kubectl proxy) reads no rollouts; no cluster source starts and nothing is logged."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/main.rs: `Cluster::from_env(&config.repos)?` stops the whole server at startup if the in-cluster CA can't be read or parsed, so Linear and GitHub are never served either, against parent AC-7."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/cluster.rs: without traffic-routing weights the fallback includes the current setWeight step, so a canary still scaling to 50% shows 50% before it gets there."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}

@@ -1,4 +1,5 @@
 use crate::board::{self, Issue};
+use crate::cluster::RolloutInfo;
 use crate::github::PrInfo;
 use crate::metrics::Metrics;
 use board_api::{Snapshot, SourceStatus};
@@ -23,6 +24,7 @@ pub trait Source: Send + Sync + 'static {
 pub struct Read {
     pub issues: Vec<Issue>,
     pub prs: Vec<PrInfo>,
+    pub rollouts: Vec<RolloutInfo>,
     /// What failed in a read that still returned data, shown as the source's error.
     pub partial: Option<String>,
     /// When the oldest data in the read was read, if older than the read.
@@ -68,6 +70,20 @@ impl Source for crate::github::GitHub {
     }
 }
 
+impl Source for crate::cluster::Cluster {
+    fn name(&self) -> &'static str {
+        "cluster"
+    }
+    async fn read(&self) -> anyhow::Result<Read> {
+        let read = crate::cluster::Cluster::read(self).await;
+        if let (0, [first, ..]) = (read.namespaces_read, read.errors.as_slice()) {
+            anyhow::bail!("no namespace's rollouts could be read, first: {first}");
+        }
+        let partial = read.errors.first().map(|e| format!("{} namespaces failed, first: {e}", read.errors.len()));
+        Ok(Read { rollouts: read.rollouts, partial, ..Read::default() })
+    }
+}
+
 /// What every source last returned, and how each read went.
 pub struct State {
     data: RwLock<BTreeMap<&'static str, Part>>,
@@ -95,6 +111,7 @@ impl State {
         let data = self.data.read().unwrap_or_else(|e| e.into_inner());
         let issues: Vec<Issue> = data.values().flat_map(|p| p.read.issues.iter().cloned()).collect();
         let prs: Vec<PrInfo> = data.values().flat_map(|p| p.read.prs.iter().cloned()).collect();
+        let rollouts: Vec<RolloutInfo> = data.values().flat_map(|p| p.read.rollouts.iter().cloned()).collect();
         Snapshot {
             generated_at: now(),
             sources: data
@@ -105,7 +122,7 @@ impl State {
                     last_error: p.last_error.clone(),
                 })
                 .collect(),
-            columns: board::columns(&issues, &prs),
+            columns: board::columns(&issues, &prs, &rollouts),
             needs_you: board::needs_you(&issues, &prs),
         }
     }
@@ -137,8 +154,16 @@ pub async fn refresh<S: Source>(state: &State, source: &S) {
     let part = data.entry(name).or_default();
     match result {
         Ok(read) => {
-            let (issues, prs) = (read.issues.len(), read.prs.len());
-            tracing::info!(source = name, issues, prs, partial = read.partial, duration_s = secs, "source read");
+            let (issues, prs, rollouts) = (read.issues.len(), read.prs.len(), read.rollouts.len());
+            tracing::info!(
+                source = name,
+                issues,
+                prs,
+                rollouts,
+                partial = read.partial,
+                duration_s = secs,
+                "source read"
+            );
             part.last_good = Some(read.as_of.map_or(now(), |t| t.min(now())));
             part.last_error = read.partial.clone();
             part.read = read;
