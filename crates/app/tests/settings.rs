@@ -62,6 +62,11 @@ fn the_settings_form_saves_to_storage() {
     let store = Some(path.clone());
     let mut harness = Harness::new_eframe(|_| BoardApp::new(Settings::default(), store));
     harness.step();
+    // Without an address there's no board to read, so Save refuses.
+    harness.get_by_label("Save").click();
+    harness.step();
+    harness.get_by_label("Couldn't save: set the board's address");
+    assert_eq!(Settings::load(&path).unwrap(), None);
     let typed = [
         ("Board address", "https://board.example"),
         ("Access client ID", "id.access"),

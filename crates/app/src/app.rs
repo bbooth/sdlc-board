@@ -158,7 +158,11 @@ impl BoardApp {
         let (save, cancel) =
             ui.horizontal(|ui| (ui.button("Save").clicked(), has_board && ui.button("Cancel").clicked())).inner;
         if save {
-            match draft.headers().and_then(|_| draft.save(store).map_err(|e| e.to_string())) {
+            let checked = match draft.url.trim() {
+                "" => Err("set the board's address".to_string()),
+                _ => draft.headers().map(drop),
+            };
+            match checked.and_then(|_| draft.save(store).map_err(|e| e.to_string())) {
                 Ok(()) => {
                     self.settings = self.draft.take().unwrap_or_default();
                     // A new address or token starts a new board, read at once.
