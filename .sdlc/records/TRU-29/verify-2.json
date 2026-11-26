@@ -1,0 +1,125 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-29",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-26T22:51:46.323Z",
+  "inputs": {
+    "branch": "feat/tru-29-uniffi-apk",
+    "commit": "6037730",
+    "build_record": ".sdlc/records/TRU-29/build-3.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-29/build-3.json says pass at 126a6b0"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 126a6b0"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 6037730"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 6037730"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-1, AC-7"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "11 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e and browser evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "4 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/core/tests/reads.rs:a_failed_read_keeps_the_board_it_had passed: cargo test -p board-core --test reads a_failed_read_keeps_the_board_it_had -- --exact"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/core/tests/reads.rs:the_board_refreshes_itself_every_30_seconds passed: cargo test -p board-core --test reads the_board_refreshes_itself_every_30_seconds -- --exact"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/ffi/tests/view.rs:the_view_carries_the_boards_lines_already_worded passed: cargo test -p board-ffi --test view the_view_carries_the_boards_lines_already_worded -- --exact"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/ffi/tests/view.rs:settings_are_trimmed_and_checked_by_the_core passed: cargo test -p board-ffi --test view settings_are_trimmed_and_checked_by_the_core -- --exact"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "4 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/ffi/src/lib.rs:72: the answer time is `self.at(now_ms) + took.elapsed()`, and `took` is a std Instant (CLOCK_MONOTONIC on Android). If the phone sleeps while a read is in flight, the answer is stamped too early and the ages afterwards read older by that sleep. No test covers the term: removing `+ took.elapsed()` passes all of BoardTest and the cargo tests. Taking a second now_ms from Kotlin after the read, or a refresh that returns before finish, would put the whole path on the app's clock."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "No cargo test covers the new clock handling. crates/core/tests/reads.rs passes Instant::now() to every Reads::finish call. Making finish ignore its `now` argument (K2), or making Board::at, view or refresh's start use Instant::now() (K1, K3, K4), leaves cargo test -p board-core -p board-ffi green. Only the Kotlin BoardTest.aLongSleepMakesTheBoardOldAndDueAgain catches them, and the Verify gate can't re-run Gradle. A Rust test that finishes at t+8h and checks server_now/refreshed would pin it where the gate can re-run it."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "This predates TRU-29 and is outside its scope. The egui native app (crates/app/src/main.rs) still times reads with web_time::Instant, which is std's CLOCK_MONOTONIC on Linux. After a laptop suspend on Omarchy it would show the same stale '5 s ago' and late refresh that the adversarial review found on Android. It may be worth its own ticket. Under Xvfb with no suspend, the native ages counted up correctly."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Carried over from round 1. The owner's screenshot shows the status-bar icons white on a near-white background and the text against the left edge: Theme.Material.NoActionBar plus enableEdgeToEdge() in android/app. CI also packages libboard_ffi.so unstripped ('Unable to strip ... libboard_ffi.so'), and the APK is 8.7 MB. I couldn't download the sdlc-board-apk artifact for a local apksigner or aapt run because the agent proxy blocks the blob host, so the signer evidence is CI's own apksigner output."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-1 browser web build of 6037730 (crates/app/web/build.sh) served by a local board-server, opened in Playwright Chromium (--use-gl=swiftshader --enable-unsafe-swiftshader) at 1280x800: The board draws: 'SDLC board' with Refresh, the stage columns (Intake through PR...), Build (3) with TRU-17, TRU-32 (sub-tickets TRU-33/34/35) and TRU-8 (TRU-13, and under it TRU-29/30/31), gate-record lines, and from the second read on the 'Needs you (1)' box and PR lines. /v1/snapshot returned 200 at 0.5 s, 31.4 s and 62.0 s, which is the 30 s refresh. There were no console errors or page errors. 'Last refreshed' read: 3 s 'linear 11 s ago'; 20 s 'linear 27 s ago' (+16 over 17 s); 40 s 'github 47 s ago, linear 48 s ago'; 70 s 'github 1 min ago, linear 18 s ago' (the server had re-read linear). Screenshots: /tmp/claude-0/-home-user/b9a14602-e11e-55ec-a02e-dd34e26263d3/scratchpad/v29/web-3s.png, /tmp/claude-0/-home-user/b9a14602-e11e-55ec-a02e-dd34e26263d3/scratchpad/v29/web-20s.png, /tmp/claude-0/-home-user/b9a14602-e11e-55ec-a02e-dd34e26263d3/scratchpad/v29/web-40s.png, /tmp/claude-0/-home-user/b9a14602-e11e-55ec-a02e-dd34e26263d3/scratchpad/v29/web-70s.png",
+    "AC-1 e2e native board-app (egui, debug build of 6037730) under Xvfb :99 1280x800x24, against the same local board-server: The same board draws in the dark theme: columns, TRU-17/TRU-32/TRU-8 with sub-tickets, Needs you (1), and 'PR #13 checks pass' / 'PR #12 checks fail'. The server logged native /v1/snapshot 200s at 22:49:10.6, 22:49:41.1 and 22:50:11.2, 30 s apart. 'Last refreshed' read: 5 s 'github 24 s ago, linear 37 s ago'; 20 s 'github 38 s ago, linear 51 s ago' (+14 over 15 s); 40 s 'github 1 min ago, linear 12 s ago' (the server re-read linear); 70 s 'github 27 s ago, linear 41 s ago' (linear +29 over 30 s; the server had re-read github). The app exited cleanly when killed and native.log has no errors. Screenshots: /tmp/claude-0/-home-user/b9a14602-e11e-55ec-a02e-dd34e26263d3/scratchpad/v29/native-5s.png, /tmp/claude-0/-home-user/b9a14602-e11e-55ec-a02e-dd34e26263d3/scratchpad/v29/native-20s.png, /tmp/claude-0/-home-user/b9a14602-e11e-55ec-a02e-dd34e26263d3/scratchpad/v29/native-40s.png, /tmp/claude-0/-home-user/b9a14602-e11e-55ec-a02e-dd34e26263d3/scratchpad/v29/native-70s.png",
+    "AC-1 e2e android/core/src/test/kotlin/BoardTest.kt (JVM, Gradle): Exit 0, 6 tests, 0 failures: aRecordedSnapshotReadsIntoColumnsWithNestedSubTickets, aReadIsOnlyDueAfterTheRefreshIntervalUnlessAsked, aLongSleepMakesTheBoardOldAndDueAgain, aFailedReadKeepsTheLastBoardAndSaysWhy, settingsAreTrimmedAndAHalfSetTokenIsRefused, theCoreSaysItsVersion.",
+    "AC-1 e2e BoardTest mutation checks on the clock handling (scratch worktree of 6037730, board-ffi rebuilt each time): (K1) Board::at returns Instant::now() and ignores now_ms: aLongSleepMakesTheBoardOldAndDueAgain fails (expected '8 h ago', got '0 s ago'), and so does aReadIsOnlyDueAfterTheRefreshIntervalUnlessAsked. (K2) core Reads::finish stamps Instant::now() and ignores its `now`: aLongSleep fails (expected '0 s ago' after the post-sleep read, got '8 h ago'). (K3) view uses Instant::now(): aLongSleep fails ('0 s ago' instead of '8 h ago'). (K4) refresh's start uses Instant::now(): aLongSleep and aReadIsOnlyDue both fail. (K6) a failed read drops the board: aFailedReadKeepsTheLastBoardAndSaysWhy fails (NPE). (K5) removing `+ took.elapsed()` from the answer time: every test still passes (see findings).",
+    "AC-1 test crates/core/tests/reads.rs:a_failed_read_keeps_the_board_it_had: 1 passed at 6037730. Fails when finish() drops the snapshot on Err.",
+    "AC-1 test crates/core/tests/reads.rs:the_board_refreshes_itself_every_30_seconds: 1 passed at 6037730. Fails when finish() drops the snapshot on Err.",
+    "AC-1 test crates/ffi/tests/view.rs:the_view_carries_the_boards_lines_already_worded: 1 passed at 6037730. In round 1 it failed when flatten kept the parent's depth.",
+    "AC-1 test crates/ffi/tests/view.rs:settings_are_trimmed_and_checked_by_the_core: 1 passed at 6037730. In round 1 it failed when trimmed() didn't trim and when a half-set token was accepted.",
+    "AC-1 e2e https://github.com/bbooth/sdlc-board/actions/runs/45905605799 (CI run 33, head 6037730, android job 140201467301): The 'Bindings are fresh' step ran uniffi-bindgen and passed. Task :core:test ran inside './gradlew :core:test :app:assembleRelease' and the build succeeded.",
+    "AC-7 e2e https://github.com/bbooth/sdlc-board/actions/runs/45905605799/job/140201467301 (CI run 33, 6037730, android job): cargo-ndk built arm64-v8a, the bindings were fresh, :core:test passed and :app:assembleRelease succeeded. The APK was signed with the secret keystore and apksigner showed CN=SDLC board, SHA-256 710e8f66...5003. The upload step logged 'Artifact sdlc-board-apk has been successfully uploaded! Final size is 8701835 bytes. Artifact ID is 15157244679'. The run's artifact list shows sdlc-board-apk 15157244679, not expired.",
+    "AC-7 owner https://linear.app/trulinc/issue/TRU-29#comment-e5897661: The owner reported that the APK from CI run 28 (commit a3ab17c) installed on their phone and opened, showing \"SDLC board, core 0.1.0\". The original message is at https://claude.ai/code/project/chan_01CiRgWxBWsAnaqeYYCVowzc?thread=cmsg_01CiRgWxBWsAnaqeYYCVowzcHrv3oAY9CciY2MRNGKognH. The screenshot at /mnt/project-files/sdlc-board/tru-29-phone-run28.jpg shows that text."
+  ]
+}
