@@ -2,13 +2,26 @@
 //! it sends. The native app takes them from the environment.
 
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     /// The board's address, e.g. `https://board.trulinc.com`.
     pub url: String,
     pub client_id: String,
     pub client_secret: String,
+}
+
+// By hand, so a `{:?}` in a log can't print the Access secret.
+impl fmt::Debug for Settings {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let secret = if self.client_secret.is_empty() { "" } else { "<redacted>" };
+        f.debug_struct("Settings")
+            .field("url", &self.url)
+            .field("client_id", &self.client_id)
+            .field("client_secret", &secret)
+            .finish()
+    }
 }
 
 impl Settings {

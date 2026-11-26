@@ -12,6 +12,8 @@ web, to one person, and no client may hold a Linear or GitHub token.
 - `crates/api` holds the snapshot types for the server and the app.
 - One eframe app is built natively, for wasm (served by the server) and for
   Android, fetching with `ehttp`, which works on all three.
+  - Superseded for Android by ADR 0002: the Android app is Kotlin and
+    Compose on the same core, through UniFFI.
   - Amended by TRU-11: native builds fetch with `ureq` and a 20 s deadline
     on the whole call, because `ehttp`'s native GET has none before the
     response headers and a server that never answered froze the board.

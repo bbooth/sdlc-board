@@ -1,0 +1,8 @@
+.gradle/
+.kotlin/
+build/
+local.properties
+*.keystore
+*.jks
+# cargo-ndk's output (README "Build"): built, not committed.
+app/src/main/jniLibs/

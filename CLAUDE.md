@@ -3,7 +3,8 @@
 One board for all pipeline work: tickets by stage, PRs and their checks,
 gate results and rollouts in flight, across every onboarded repo. A Rust
 server on the homelab k3s cluster reads Linear, GitHub and the cluster and
-serves one snapshot; an egui app shows it on Omarchy, Android and the web.
+serves one snapshot; an egui app shows it on Omarchy and the web, and a
+Kotlin app on Android, all on one Rust core.
 The first ticket is TRU-8 in Linear (project "SDLC board").
 
 **Start with `docs/STATUS.md`**: what's shipped, what's next. Update it in
@@ -20,6 +21,10 @@ A Cargo workspace, not built yet:
   the native read and the wording.
 - `crates/app/`: the egui (eframe) app, for native Linux and wasm; it only
   draws.
+- `crates/ffi/`: `board-core` for Kotlin through UniFFI (ADR 0002).
+- `android/`: the Android app (Kotlin, Compose). Its `core` module holds
+  the generated bindings, committed: never hand-edit them; regenerate
+  them as `android/README.md` says.
 - `deploy/`, `argocd/`: the chart and Application, once it deploys.
 
 ## Pipeline
