@@ -37,17 +37,28 @@ are the native app's `BOARD_ACCESS_CLIENT_ID` and `BOARD_ACCESS_CLIENT_SECRET`.
    4. Add both to the existing Secret, keeping its other keys. The key
       goes in as the file's bytes: the server needs the PEM's real line
       breaks, and a key pasted on one line with `\n` escapes fails at
-      start. Then restart the pod and delete the `.pem` file:
+      start. The file goes through a patch file, so the key never sits on a
+      command line. Then restart the pod and delete the `.pem` file:
 
       ```sh
       kubectl -n sdlc-board patch secret sdlc-board-tokens --type merge \
         -p '{"stringData":{"GITHUB_APP_ID":"<App ID>"}}'
+      kubectl create secret generic app-key \
+        --from-file=GITHUB_APP_PRIVATE_KEY=<downloaded>.pem --dry-run=client \
+        -o go-template='{"data":{"GITHUB_APP_PRIVATE_KEY":"{{.data.GITHUB_APP_PRIVATE_KEY}}"}}' \
+        > app-key.json
       kubectl -n sdlc-board patch secret sdlc-board-tokens --type merge \
-        -p "{\"data\":{\"GITHUB_APP_PRIVATE_KEY\":\"$(base64 -w0 <downloaded>.pem)\"}}"
+        --patch-file app-key.json
+      rm app-key.json
       kubectl -n sdlc-board rollout restart deployment sdlc-board
       ```
 
    The pod logs `reading GitHub as the GitHub App` at start, and `/metrics`
-   counts `board_github_app_tokens_total{result="ok"}`. Remove the old
-   `GITHUB_TOKEN` key once the App works; while both are set, the token is
-   ignored with a warning.
+   counts `board_github_app_tokens_total{result="ok"}`. While the old
+   `GITHUB_TOKEN` key is set too, it's ignored with a warning; once the App
+   works, remove it:
+
+   ```sh
+   kubectl -n sdlc-board patch secret sdlc-board-tokens --type json \
+     -p '[{"op":"remove","path":"/data/GITHUB_TOKEN"}]'
+   ```
