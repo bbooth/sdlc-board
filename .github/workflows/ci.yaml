@@ -55,7 +55,7 @@ jobs:
         run: ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME" cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build -p board-ffi --release --locked
       - name: Test and build
         working-directory: android
-        run: ./gradlew :core:test :app:assembleRelease -Pboard.versionCode=${{ github.run_number }}
+        run: ./gradlew :core:test :app:testDebugUnitTest :app:assembleRelease -Pboard.versionCode=${{ github.run_number }}
       # The release key (android/README.md). Only Dependabot's PRs, which get no
       # secrets, sign with a throwaway key: that APK can't update an install signed with the real one.
       - name: Sign

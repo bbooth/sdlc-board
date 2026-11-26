@@ -735,7 +735,11 @@ internal object IntegrityCheckingUniffiLib {
     internal fun ensureInitialized() = Unit
     external fun uniffi_board_ffi_checksum_func_core_version(
     ): Int
+    external fun uniffi_board_ffi_checksum_func_settings_load(
+    ): Int
     external fun uniffi_board_ffi_checksum_func_settings_problem(
+    ): Int
+    external fun uniffi_board_ffi_checksum_func_settings_save(
     ): Int
     external fun uniffi_board_ffi_checksum_func_settings_trimmed(
     ): Int
@@ -778,7 +782,11 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_board_ffi_fn_func_core_version(uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
+    external fun uniffi_board_ffi_fn_func_settings_load(`path`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    ): RustBuffer.ByValue
     external fun uniffi_board_ffi_fn_func_settings_problem(`settings`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
+    ): RustBuffer.ByValue
+    external fun uniffi_board_ffi_fn_func_settings_save(`settings`: RustBuffer.ByValue,`path`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
     external fun uniffi_board_ffi_fn_func_settings_trimmed(`settings`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
@@ -904,7 +912,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_board_ffi_checksum_func_core_version() and 0xFFFF) != 1233) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_board_ffi_checksum_func_settings_load() and 0xFFFF) != 49469) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_board_ffi_checksum_func_settings_problem() and 0xFFFF) != 44234) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_board_ffi_checksum_func_settings_save() and 0xFFFF) != 40101) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_board_ffi_checksum_func_settings_trimmed() and 0xFFFF) != 43259) {
@@ -2082,6 +2096,38 @@ public object FfiConverterOptionalTypeLink: FfiConverterRustBuffer<Link?> {
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeSettings: FfiConverterRustBuffer<Settings?> {
+    override fun read(buf: ByteBuffer): Settings? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeSettings.read(buf)
+    }
+
+    override fun allocationSize(value: Settings?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeSettings.allocationSize(value)
+        }
+    }
+
+    override fun write(value: Settings?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeSettings.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.String>> {
     override fun read(buf: ByteBuffer): List<kotlin.String> {
         val len = buf.getInt()
@@ -2257,6 +2303,20 @@ public object FfiConverterSequenceTypeSubTicket: FfiConverterRustBuffer<List<Sub
     
 
         /**
+         * The settings saved at `path`, or null when none are (first start).
+         */ fun `settingsLoad`(`path`: kotlin.String): Settings? {
+            return FfiConverterOptionalTypeSettings.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_board_ffi_fn_func_settings_load(
+    
+        
+        FfiConverterString.lower(`path`),_status)
+}
+    )
+    }
+    
+
+        /**
          * Why these settings can't read a board, or null if they can.
          */ fun `settingsProblem`(`settings`: Settings): kotlin.String? {
             return FfiConverterOptionalString.lift(
@@ -2265,6 +2325,22 @@ public object FfiConverterSequenceTypeSubTicket: FfiConverterRustBuffer<List<Sub
     
         
         FfiConverterTypeSettings.lower(`settings`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Saves the settings at `path`, trimmed and readable by the app only, or
+         * says why it didn't: they can't read a board, or the write failed.
+         */ fun `settingsSave`(`settings`: Settings, `path`: kotlin.String): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_board_ffi_fn_func_settings_save(
+    
+        
+        FfiConverterTypeSettings.lower(`settings`),
+        FfiConverterString.lower(`path`),_status)
 }
     )
     }

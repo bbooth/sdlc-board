@@ -3,6 +3,15 @@
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::fs;
+use std::io::Write;
+use std::path::Path;
+
+/// Whether `url` is this device, where plain http can't be overheard.
+fn local(url: &str) -> bool {
+    let host = url.strip_prefix("http://").unwrap_or("").split(['/', ':']).next();
+    matches!(host, Some("localhost" | "127.0.0.1"))
+}
 
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -42,10 +51,37 @@ impl Settings {
 
     /// Why these settings can't read a board, if they can't.
     pub fn check(&self) -> Result<(), String> {
-        if self.url.trim().is_empty() {
+        let url = self.url.trim();
+        if url.is_empty() {
             return Err("set the board's address".into());
         }
-        self.headers().map(drop)
+        // ureq doesn't keep Android's cleartext rule, so the token's guard is here.
+        if !self.headers()?.is_empty() && !url.starts_with("https://") && !local(url) {
+            return Err("use an https:// address, so the Access token isn't sent in the clear".into());
+        }
+        Ok(())
+    }
+
+    /// The settings saved at `path`, or `None` when none are, or they don't read.
+    pub fn load(path: &Path) -> Option<Settings> {
+        serde_json::from_slice(&fs::read(path).ok()?).ok()
+    }
+
+    /// Saves the settings, trimmed, if they can read a board: whole or not
+    /// at all, and readable by this user only, since they hold the secret.
+    pub fn save(&self, path: &Path) -> Result<(), String> {
+        let s = self.trimmed();
+        s.check()?;
+        let tmp = path.with_extension("tmp");
+        let mut file = fs::OpenOptions::new();
+        file.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut file, 0o600);
+        let json = serde_json::to_vec(&s).map_err(|e| e.to_string())?;
+        file.open(&tmp)
+            .and_then(|mut f| f.write_all(&json).and_then(|()| f.sync_all()))
+            .and_then(|()| fs::rename(&tmp, path))
+            .map_err(|e| format!("couldn't save the settings: {e}"))
     }
 
     /// The Access headers to send: both, or none when neither is set. One

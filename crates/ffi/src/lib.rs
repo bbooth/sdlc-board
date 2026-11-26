@@ -5,6 +5,7 @@
 
 use board_api::{Snapshot, Ticket};
 use board_core::{words, Reads};
+use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -31,6 +32,19 @@ pub fn settings_trimmed(settings: Settings) -> Settings {
 #[uniffi::export]
 pub fn settings_problem(settings: Settings) -> Option<String> {
     settings.check().err()
+}
+
+/// The settings saved at `path`, or null when none are (first start).
+#[uniffi::export]
+pub fn settings_load(path: String) -> Option<Settings> {
+    Settings::load(Path::new(&path))
+}
+
+/// Saves the settings at `path`, trimmed and readable by the app only, or
+/// says why it didn't: they can't read a board, or the write failed.
+#[uniffi::export]
+pub fn settings_save(settings: Settings, path: String) -> Option<String> {
+    settings.save(Path::new(&path)).err()
 }
 
 /// The version of the core the app was built with, e.g. "0.1.0".

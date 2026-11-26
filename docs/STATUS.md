@@ -90,7 +90,14 @@
   `board-ffi` for arm64 phones, runs the tests and attaches a signed APK
   (`sdlc-board-apk`). `android/README.md` says how to build it.
 
+- TRU-30: the Android app asks for the board's address and Access
+  service token on first start (each field takes a paste; Settings
+  changes them later), saves them trimmed as `settings.json` in
+  `noBackupFilesDir`, readable by the app only, and reads the board when
+  the core says it's due, every second's check counting the time the phone
+  slept. A failed read shows its cause above the last board. A token is
+  only sent to an `https://` address, or to this device.
+
 ## Next
 
-- TRU-13 (Android): TRU-30 (settings and reads), TRU-31 (the board
-  screen).
+- TRU-13 (Android): TRU-31 (the board screen).
