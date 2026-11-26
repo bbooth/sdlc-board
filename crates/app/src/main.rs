@@ -94,7 +94,7 @@ impl BoardApp {
         };
         let (reads, ctx) = (self.reads.clone(), ctx.clone());
         get(&self.settings, move |read| {
-            reads.lock().unwrap_or_else(|e| e.into_inner()).finish(n, read);
+            reads.lock().unwrap_or_else(|e| e.into_inner()).finish(n, read, Instant::now());
             ctx.request_repaint();
         });
     }

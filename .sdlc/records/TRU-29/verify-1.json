@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-29",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-26T22:26:34.265Z",
+  "inputs": {
+    "branch": "feat/tru-29-uniffi-apk",
+    "commit": "5620e20",
+    "build_record": ".sdlc/records/TRU-29/build-2.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-29/build-2.json says pass at 6f5c779"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 6f5c779"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 5620e20"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 5620e20"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-1, AC-7"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "10 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Nothing here needs more than tests"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "4 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/ffi/tests/view.rs:the_view_carries_the_boards_lines_already_worded passed: cargo test -p board-ffi --test view the_view_carries_the_boards_lines_already_worded -- --exact"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/ffi/tests/view.rs:settings_are_trimmed_and_checked_by_the_core passed: cargo test -p board-ffi --test view settings_are_trimmed_and_checked_by_the_core -- --exact"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/core/tests/reads.rs:a_failed_read_keeps_the_board_it_had passed: cargo test -p board-core --test reads a_failed_read_keeps_the_board_it_had -- --exact"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/ffi/tests/view.rs:a_sub_ticket_names_its_repo_only_when_it_differs_from_its_parents passed: cargo test -p board-ffi --test view a_sub_ticket_names_its_repo_only_when_it_differs_from_its_parents -- --exact"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "3 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "android/app/src/main/kotlin/com/trulinc/board/MainActivity.kt with AndroidManifest.xml (Theme.Material.NoActionBar) and enableEdgeToEdge(): in the owner's screenshot (/mnt/project-files/sdlc-board/tru-29-phone-run28.jpg) the status-bar icons are white on the near-white Compose background and nearly invisible, and the text sits against the left edge with no padding. This is cosmetic in a placeholder screen, but TRU-30/31 should use a light/dark-consistent window theme."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "android/app packaging: both CI runs log 'Unable to strip the following libraries, packaging them as they are: ... libboard_ffi.so ...', so the APK carries an unstripped .so (the local arm64 release .so is 3.7 MB and 'not stripped'). Consider strip = true in a release profile, or giving AGP the NDK's strip tool, to shrink the 8.7 MB APK."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Couldn't run apksigner verify --print-certs or aapt dump badging on the sdlc-board-apk artifact here: the artifact blob host (productionresultssa*.blob.core.windows.net) is blocked by the agent proxy, through both gh and the GitHub MCP. The signer evidence for AC-7 is CI's own apksigner output plus the owner's install."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-1 e2e android/core/src/test/kotlin/BoardTest.kt (JVM, Gradle): BUILD SUCCESSFUL. TEST-BoardTest.xml: 5 tests, 0 failures, 0 errors. Tests: aRecordedSnapshotReadsIntoColumnsWithNestedSubTickets, aReadIsOnlyDueAfterTheRefreshIntervalUnlessAsked, aFailedReadKeepsTheLastBoardAndSaysWhy, settingsAreTrimmedAndAHalfSetTokenIsRefused, theCoreSaysItsVersion.",
+    "AC-1 e2e BoardTest mutation checks (scratch worktree, board-ffi rebuilt each time): (1) reads.rs finish() drops the snapshot on Err: aFailedReadKeepsTheLastBoardAndSaysWhy fails (NullPointerException). (2) Settings::trimmed no longer trims: settingsAreTrimmedAndAHalfSetTokenIsRefused fails (expected the trimmed Settings, got the untrimmed one). (3) headers() accepts a half-set token: the same test fails (expected the 'set both...' message, got null). (4) ffi flatten keeps the parent's depth: aRecordedSnapshotReadsIntoColumnsWithNestedSubTickets fails (expected depth 1 for TRU-10, got 0). In each case only the targeted test failed.",
+    "AC-1 test crates/ffi/tests/view.rs:the_view_carries_the_boards_lines_already_worded: 1 passed. Fails when flatten keeps the parent's depth.",
+    "AC-1 test crates/ffi/tests/view.rs:settings_are_trimmed_and_checked_by_the_core: 1 passed. Fails when trimmed() doesn't trim, and fails when a half-set token is accepted.",
+    "AC-1 test crates/core/tests/reads.rs:a_failed_read_keeps_the_board_it_had: 1 passed. Fails when finish() drops the snapshot on Err.",
+    "AC-1 test crates/ffi/tests/view.rs:a_sub_ticket_names_its_repo_only_when_it_differs_from_its_parents: 1 passed",
+    "AC-1 e2e https://github.com/bbooth/sdlc-board/actions/runs/45903081960/job/140193273120 (CI run 30, head 5620e20, android job): The 'Bindings are fresh' step succeeded with the same uniffi-bindgen command. Task :core:test ran inside './gradlew :core:test :app:assembleRelease -Pboard.versionCode=30', and the build was successful.",
+    "AC-7 e2e https://github.com/bbooth/sdlc-board/actions/runs/45903081960/job/140193273120 (CI run 30, head 5620e20, android job; full log read through gh api): cargo ndk printed 'Building arm64-v8a (aarch64-linux-android)', finished the release profile and copied the library into android/app/src/main/jniLibs. ':app:assembleRelease' was BUILD SUCCESSFUL. The Sign step ran with KEYSTORE: *** and PASSWORD: *** and gave no throwaway warning. apksigner verify --print-certs showed 'V3.0 Signer: certificate DN: CN=SDLC board', SHA-256 710e8f6613561f4bbd6effdf4993a0af3e68e748044d36dc983f10e154365003. The upload step logged 'Artifact sdlc-board-apk has been successfully uploaded', artifact ID 15157400132, 8699806 bytes. The run's artifact list shows sdlc-board-apk (not expired, expires 2026-12-26).",
+    "AC-7 e2e https://github.com/bbooth/sdlc-board/actions/runs/45889443570/job/140148185764 (CI run 28, a3ab17c, android job): Same steps, all successful, with versionCode=28. Signer DN CN=SDLC board with the same SHA-256 710e8f66...5003, and an sdlc-board-apk artifact uploaded.",
+    "AC-7 owner https://linear.app/trulinc/issue/TRU-29#comment-e5897661: The owner reported that the APK from CI run 28 (commit a3ab17c) installed on their phone and opened, showing \"SDLC board, core 0.1.0\". The original message is at https://claude.ai/code/project/chan_01CiRgWxBWsAnaqeYYCVowzc?thread=cmsg_01CiRgWxBWsAnaqeYYCVowzcHrv3oAY9CciY2MRNGKognH. The screenshot at /mnt/project-files/sdlc-board/tru-29-phone-run28.jpg shows exactly that text below the status bar."
+  ]
+}

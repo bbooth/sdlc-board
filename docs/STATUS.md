@@ -81,7 +81,16 @@
   requests by `client` (`android`, `native`, `web` or `other`, from the
   User-Agent) in `board_http_requests_total`.
 
+- TRU-29: `crates/ffi` (`board-ffi`) exports the core to Kotlin with
+  UniFFI (ADR 0002): settings trimmed and checked, a `Board` that reads
+  when due and keeps the last board, and the board as already-worded
+  lines. `android/` is the Gradle project: `core` holds the committed
+  bindings and their JVM tests, `app` only shows the core's version so
+  far. CI's `android` job checks the bindings are fresh, builds
+  `board-ffi` for arm64 phones, runs the tests and attaches a signed APK
+  (`sdlc-board-apk`). `android/README.md` says how to build it.
+
 ## Next
 
-- TRU-13 (Android): TRU-29 (UniFFI and a signed APK), TRU-30 (settings
-  and reads), TRU-31 (the board screen).
+- TRU-13 (Android): TRU-30 (settings and reads), TRU-31 (the board
+  screen).

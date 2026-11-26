@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-29",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-26T22:53:46.922Z",
+  "inputs": {
+    "branch": "feat/tru-29-uniffi-apk",
+    "commit": "da8e975",
+    "verify_record": ".sdlc/records/TRU-29/verify-2.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-29/verify-2.json says pass at 6037730"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 6037730"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at da8e975"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read da8e975"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "5 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "0 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "0 blocking findings refuted, 5 minor carried to the PR"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": ".github/workflows/ci.yaml:58: the Sign step decodes the release keystore and password on the same runner where earlier steps ran the branch's own cargo build.rs and Gradle build scripts. Code on a same-repo branch, or a branch run through the new workflow_dispatch trigger, can leave a background process running or replace $ANDROID_HOME/build-tools/*/apksigner, which is writable on hosted runners. Either way it can read $KEYSTORE and $PASSWORD when Sign runs, or get its own APK signed with the production key, and that APK installs over the owner's app. Forks get no secrets, so only someone with push access can do this. A separate signing job that takes the unsigned APK as an artifact and runs no repo code would close it.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/ffi/src/lib.rs:17: Settings is exported as a plain UniFFI Record, so its generated Kotlin data class toString() prints clientSecret. The Rust side redacts it (crates/core/src/settings.rs:16), but any Log.d(\"$settings\") or crash report in the app would leak the Access service token. This diff never logs it, so this is a trap for TRU-30, which stores and edits these settings. The doc comment admits it rather than guarding against it.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/ffi/src/lib.rs:70: on Android the read goes through Rust's ureq, not Android's network stack, so the platform's default block on cleartext traffic (targetSdk 35, android/app/build.gradle.kts:15) does not apply. Settings.check (crates/core/src/settings.rs:45) accepts an http:// address. A board URL typed as http:// therefore sends CF-Access-Client-Id and CF-Access-Client-Secret in the clear from the phone. Consider having check() refuse a non-https URL when a token is set, before TRU-30 adds the settings screen.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": ".github/workflows/ci.yaml:55: the arm64 board-ffi build uses whatever NDK the runner image calls latest ($ANDROID_NDK_LATEST_HOME), and line 77 signs with whatever build-tools version sorts highest. When GitHub updates ubuntu-latest, the APK changes or the build breaks with no commit in this repo. A run that worked once can't be rebuilt the same way, and nothing in the run log ties an APK to the NDK it was built with. Pinning the NDK and build-tools versions (as CARGO_NDK_VERSION already is) would fix this, or at least printing them in the log.",
+      "status": "open",
+      "scope": "operability"
+    },
+    {
+      "severity": "minor",
+      "summary": ".github/workflows/ci.yaml:58: versionCode comes from github.run_number, and artifacts are kept for 30 days (line 88). Rolling the phone back to an earlier APK means installing a lower versionCode, which Android refuses unless the app is uninstalled first (that also clears its settings once TRU-30 stores them). The only rollback is a revert commit that builds a new, higher number. android/README.md doesn't describe this rollback path.",
+      "status": "open",
+      "scope": "operability"
+    }
+  ],
+  "decision": "Open the PR and advance to PR review",
+  "evidence": []
+}
