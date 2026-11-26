@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-19",
+  "round": 1,
+  "result": "fail",
+  "recorded_at": "2026-11-26T05:22:33.829Z",
+  "inputs": {
+    "branch": "feat/tru-19-app-deploy",
+    "commit": "75f7ef0",
+    "verify_record": ".sdlc/records/TRU-19/verify-1.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-19/verify-1.json says pass at 95beb48"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 95beb48"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 75f7ef0"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read 75f7ef0"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, operability"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "3 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "1 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "1 stand: [operability] argocd/README.md:43-54: the block writes GITHUB_APP_ID by itself first, builds the key patch in a separate command, and ends with an unconditional `rollout restart`. Suppose the owner pastes it and the key step fails, for example because `<downloaded>.pem` is mistyped: kubectl create errors, app-key.json is left empty and the --patch-file patch fails. The restart still runs. The new pod then exits at start with \"GITHUB_APP_ID is set but GITHUB_APP_PRIVATE_KEY isn't\" (crates/server/src/main.rs:35-36 returns the error from Settings::from_values) and goes into CrashLoopBackOff. Because the Deployment uses `strategy: Recreate` (deploy/templates/board.yaml:31-32), the old pod is already gone and board.trulinc.com is down. A wrong or non-RSA PEM ends the same way. The README gives no back-out step (remove GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY, then restart). Fix: write both keys in one patch, or chain the commands with `&&`. Also add the back-out command, and a check after the restart such as `kubectl rollout status` or reading the logs."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "argocd/README.md:46-52: the base64 private key is written to app-key.json in the current directory, with the default umask (usually world-readable), and .gitignore covers only /target. If someone runs it from a checkout and the sequence stops before `rm`, the key is left in a file that git would let them commit. The `.pem` file has the same problem: the prose says to delete it (line 41), but the code block has no command for it. Writing app-key.json under `umask 077` in a `mktemp -d` directory and adding `rm <downloaded>.pem` would fix both.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "blocking",
+      "summary": "argocd/README.md:43-54: the block writes GITHUB_APP_ID by itself first, builds the key patch in a separate command, and ends with an unconditional `rollout restart`. Suppose the owner pastes it and the key step fails, for example because `<downloaded>.pem` is mistyped: kubectl create errors, app-key.json is left empty and the --patch-file patch fails. The restart still runs. The new pod then exits at start with \"GITHUB_APP_ID is set but GITHUB_APP_PRIVATE_KEY isn't\" (crates/server/src/main.rs:35-36 returns the error from Settings::from_values) and goes into CrashLoopBackOff. Because the Deployment uses `strategy: Recreate` (deploy/templates/board.yaml:31-32), the old pod is already gone and board.trulinc.com is down. A wrong or non-RSA PEM ends the same way. The README gives no back-out step (remove GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY, then restart). Fix: write both keys in one patch, or chain the commands with `&&`. Also add the back-out command, and a check after the restart such as `kubectl rollout status` or reading the logs.",
+      "status": "open",
+      "scope": "operability",
+      "reason": "Every step holds at HEAD 75f7ef0. argocd/README.md:44-53 is a set of separate commands with no `&&` or `set -e`, so the restart at line 53 runs even if lines 46-51 fail. The `> app-key.json` redirect creates the file before kubectl runs, so a failed create leaves it empty and the --patch-file patch fails. The Secret then holds GITHUB_APP_ID alone. board.yaml:79-90 maps both keys with optional: true, so the pod still starts. github_app.rs:47 bails on (Some, None), and main.rs:35-36 sends that error up with `?`, so the process exits. A bad PEM exits the same way at github_app.rs:52-56. Deployment strategy Recreate (board.yaml:31-32) removes the old pod before the new one starts, so the board is down. The README has no back-out step and no check after the restart. It is a bit smaller than claimed: the owner would see the kubectl error in the terminal and could fix it by hand. But nothing in the block stops the outage.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "argocd/README.md:56-57: the success signal is given as `/metrics` with `board_github_app_tokens_total{result=\"ok\"}`, but /metrics is served only on port 9091. The HTTPRoute sends board.trulinc.com to 8080 (deploy/templates/board.yaml:128-131), so it can't be read there. Give the command that reaches it, e.g. `kubectl -n sdlc-board port-forward svc/sdlc-board 9091` or a Prometheus query. Also name the failure series (result other than ok) to check, so a missing installation on a repo shows up.",
+      "status": "open",
+      "scope": "operability"
+    }
+  ],
+  "decision": "Back to Build: fix what stands, then Build, Verify and review again",
+  "evidence": []
+}

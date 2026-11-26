@@ -19,7 +19,8 @@ repos:
     linearTeam: TRU
     linearProject: SDLC board
 
-# Applied by hand (argocd/README.md): LINEAR_API_KEY, optional GITHUB_TOKEN.
+# Applied by hand (argocd/README.md): LINEAR_API_KEY, and the GitHub App's
+# GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY (or a public-only GITHUB_TOKEN).
 tokensSecret: sdlc-board-tokens
 
 # image.tag is what ArgoCD Image Updater pins (argocd/application.yaml).

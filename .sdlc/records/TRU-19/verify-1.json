@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-19",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-26T05:20:29.657Z",
+  "inputs": {
+    "branch": "feat/tru-19-app-deploy",
+    "commit": "95beb48",
+    "build_record": ".sdlc/records/TRU-19/build-1.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-19/build-1.json says pass at 46d13e6"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 46d13e6"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 95beb48"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 95beb48"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-6"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "6 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Nothing here needs more than tests"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "0 named tests are in the repo"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "2 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "No committed check asserts the chart's GITHUB_APP_* env entries or the no-key rule. CI's helm lint and kubeconform in .github/workflows/ci.yaml would still pass if the entries were dropped or optional: true were removed. The ticket's render and grep tests are manual only."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "argocd/README.md step 4.4: app-key.json (the base64 key) is written to the current directory, and .gitignore covers only /target. Run from a checkout, an interrupted sequence could leave it untracked but committable. The prose also says to delete the .pem, but the code block has no command for it. Writing it under mktemp, or adding *.pem and app-key.json to .gitignore, would close this."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-6 e2e helm template sdlc-board deploy/ (alpine/helm:3.16.3), HEAD vs origin/main: HEAD renders GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY as secretKeyRef sdlc-board-tokens, optional: true. The output has no BEGIN marker and no key material. helm lint passes. origin/main renders 0 GITHUB_APP entries, so the check fails without the change.",
+    "AC-6 e2e git grep -nE 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' HEAD; git log origin/main..HEAD -p: Only the test fixtures crates/server/tests/fixtures/app_test_key_pkcs1.pem and access_test_key.pem match. The branch's commits add no key material.",
+    "AC-6 e2e throwaway k3s: Deployment applied with a Secret holding only LINEAR_API_KEY and GITHUB_TOKEN: The API server accepted it and the pod reached Running. GITHUB_APP_ID was empty and GITHUB_APP_PRIVATE_KEY unset (${VAR+yes} empty), so the optional entries don't block start.",
+    "AC-6 e2e argocd/README.md step 4.4 commands run verbatim (App ID 123456, the fixture PEM as downloaded.pem), then the GITHUB_TOKEN removal command: Both patches applied and the Secret kept its keys (GITHUB_APP_ID GITHUB_APP_PRIVATE_KEY GITHUB_TOKEN LINEAR_API_KEY). The read-back key is byte-identical to the 27-line PEM (cmp, sha256 63f256e7...). app-key.json was removed and the key never appeared in argv. The rollout restart produced a pod with ID=[123456] and a GITHUB_APP_PRIVATE_KEY whose sha256 is the PEM file's (63f256e7...), so the line breaks and trailing newline came through. Running the key commands again gave 'patched (no change)'. The removal command left GITHUB_APP_ID GITHUB_APP_PRIVATE_KEY LINEAR_API_KEY, and the next pod saw TOKEN=[] with the App settings intact.",
+    "AC-6 e2e board-server (target/debug) given the exact bytes read back from the Secret, against a fake GitHub on 127.0.0.1: It logged 'reading GitHub as the GitHub App' app_id=123456 and sent GET /repos/bbooth/private-repo/installation with an App JWT, then POST /app/installations/42/access_tokens. Pulls were read with Bearer ghs_fake, and /metrics showed board_github_app_tokens_total{result=\"ok\"} 1. With neither setting it served with the public-only warning. With the key on one line with \\n escapes it exited 1 ('isn't an RSA private key in PEM form', as the README warns). With the ID only it exited 1, naming the missing setting. No error output showed key bytes.",
+    "AC-6 inspection argocd/README.md step 4.1-4.3: The steps name read-only Checks, Contents, Metadata and Pull requests, everything else No access, the Webhook > Active box unticked, and installing on selected repos only. Clicking through GitHub's UI was not checked."
+  ]
+}

@@ -75,6 +75,19 @@ spec:
                   name: {{ .Values.tokensSecret }}
                   key: GITHUB_TOKEN
                   optional: true
+            # The GitHub App (argocd/README.md); when both are set, GITHUB_TOKEN is ignored.
+            - name: GITHUB_APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tokensSecret }}
+                  key: GITHUB_APP_ID
+                  optional: true
+            - name: GITHUB_APP_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tokensSecret }}
+                  key: GITHUB_APP_PRIVATE_KEY
+                  optional: true
           ports:
             - name: http
               containerPort: 8080

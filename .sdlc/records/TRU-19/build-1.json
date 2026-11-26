@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-19",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-26T04:36:34.831Z",
+  "inputs": {
+    "branch": "feat/tru-19-app-deploy",
+    "commit": "46d13e6"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-19-app-deploy"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "4 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "No code changed"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "67 lines changed, counting 0 test lines at half; size S allows 300"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 46d13e6"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "3 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "deploy/templates/board.yaml:78-90: no check in the repo fails without this change. CI only runs helm lint and kubeconform, and both pass if GITHUB_APP_ID or GITHUB_APP_PRIVATE_KEY is missing or loses optional: true. Checked by hand with helm template (both render from sdlc-board-tokens with optional: true, no key material); say so in the PR. The last clause of AC-6 can only be checked after the merge and the owner's setup."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "argocd/README.md:44-45: the second patch put the whole base64-encoded private key on kubectl's command line, readable via ps or /proc/<pid>/cmdline while it runs. Keep the key out of argv, e.g. a dry-run secret rendered into a patch file."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "argocd/README.md:51-53: the README says to remove the old GITHUB_TOKEN key once the App works but gives no command for it."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
