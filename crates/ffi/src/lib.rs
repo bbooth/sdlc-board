@@ -10,43 +10,27 @@ use std::time::Instant;
 
 uniffi::setup_scaffolding!();
 
-/// Where to read the board and the Access service token to send.
-#[derive(Clone, PartialEq, Eq, uniffi::Record)]
+pub use board_core::Settings;
+
+/// Where to read the board and the Access service token to send: the
+/// core's own type (its Debug hides the secret).
+#[uniffi::remote(Record)]
 pub struct Settings {
     pub url: String,
     pub client_id: String,
     pub client_secret: String,
 }
 
-// The core's, so the secret stays out of logs here too.
-impl std::fmt::Debug for Settings {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        board_core::Settings::from(self.clone()).fmt(f)
-    }
-}
-
-impl From<Settings> for board_core::Settings {
-    fn from(s: Settings) -> Self {
-        board_core::Settings { url: s.url, client_id: s.client_id, client_secret: s.client_secret }
-    }
-}
-
-impl From<board_core::Settings> for Settings {
-    fn from(s: board_core::Settings) -> Self {
-        Settings { url: s.url, client_id: s.client_id, client_secret: s.client_secret }
-    }
-}
-
 /// The settings without the spaces a paste often brings.
 #[uniffi::export]
 pub fn settings_trimmed(settings: Settings) -> Settings {
-    board_core::Settings::from(settings).trimmed().into()
+    settings.trimmed()
 }
 
 /// Why these settings can't read a board, or null if they can.
 #[uniffi::export]
 pub fn settings_problem(settings: Settings) -> Option<String> {
-    board_core::Settings::from(settings).check().err()
+    settings.check().err()
 }
 
 /// The version of the core the app was built with, e.g. "0.1.0".
@@ -58,7 +42,7 @@ pub fn core_version() -> String {
 /// The board as last read, and why it may be out of date.
 #[derive(uniffi::Object)]
 pub struct Board {
-    settings: board_core::Settings,
+    settings: Settings,
     reads: Mutex<Reads>,
 }
 
@@ -66,7 +50,7 @@ pub struct Board {
 impl Board {
     #[uniffi::constructor]
     pub fn new(settings: Settings) -> Arc<Board> {
-        Arc::new(Board { settings: board_core::Settings::from(settings).trimmed(), reads: Mutex::default() })
+        Arc::new(Board { settings: settings.trimmed(), reads: Mutex::default() })
     }
 
     /// Reads the snapshot if a read is due, or now if `asked` and none is

@@ -1784,7 +1784,8 @@ public object FfiConverterTypeRolloutLine: FfiConverterRustBuffer<RolloutLine> {
 
 
 /**
- * Where to read the board and the Access service token to send.
+ * Where to read the board and the Access service token to send: the
+ * core's own type (its Debug hides the secret).
  */
 data class Settings (
     var `url`: kotlin.String
