@@ -1,3 +1,4 @@
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -19,22 +20,22 @@ class AppTest {
 
     @Test
     fun aFreshInstallAsksForTheSettingsAndSettingsChangesThem() {
-        // No ticking, so nothing here reads the network: each step advances one frame to recompose.
+        // No ticking, so nothing here reads the network: each step advances 100 ms (under the 1 s tick) to recompose.
         compose.mainClock.autoAdvance = false
         compose.onNodeWithText("Board settings").assertExists()
         compose.onNodeWithText("Cancel").assertDoesNotExist()
         compose.onNodeWithTag("url").performTextClearance()
         compose.onNodeWithTag("url").performTextInput("https://board.example")
         compose.onNodeWithText("Save").performClick()
-        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(100)
 
         val noBackup = File(compose.activity.noBackupFilesDir, "settings.json")
         assertTrue(noBackup.readText().contains("https://board.example"))
         compose.onNodeWithText("Settings").performClick()
-        compose.mainClock.advanceTimeByFrame()
-        compose.onNodeWithText("https://board.example").assertExists()
+        compose.mainClock.advanceTimeBy(100)
+        compose.onNodeWithTag("url").assertTextContains("https://board.example")
         compose.onNodeWithText("Cancel").performClick()
-        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(100)
         compose.onNodeWithText("Board settings").assertDoesNotExist()
     }
 }

@@ -36,7 +36,11 @@ android {
         unitTests {
             isIncludeAndroidResources = true
             // The tests call the host build of board-ffi: `cargo build -p board-ffi` first.
-            all { it.systemProperty("jna.library.path", rootProject.file("../target/debug").absolutePath) }
+            all {
+                it.systemProperty("jna.library.path", rootProject.file("../target/debug").absolutePath)
+                // CI has only the log: show why a test failed, not just where.
+                it.testLogging.exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+            }
         }
     }
 
