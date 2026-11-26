@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-19",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-26T05:42:36.242Z",
+  "inputs": {
+    "branch": "feat/tru-19-app-deploy",
+    "commit": "bb6dc0d",
+    "build_record": ".sdlc/records/TRU-19/build-2.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-19/build-2.json says pass at 60cb511"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 60cb511"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at bb6dc0d"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged bb6dc0d"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-6"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "8 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Nothing here needs more than tests"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "0 named tests are in the repo"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "1 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "argocd/README.md step 5: the JSON-patch remove fails if the App keys are already gone ('The request is invalid', exit 1), so the chained restart doesn't run. I saw this running step 5 a second time. Harmless, since there's then nothing to back out, but the step isn't idempotent."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-6 e2e helm template sdlc-board deploy/ --namespace sdlc-board (alpine/helm:3.16.3), HEAD vs origin/main: HEAD renders GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY as secretKeyRef to sdlc-board-tokens with optional: true, and contains no BEGIN or PRIVATE KEY text. origin/main renders neither entry (0 GITHUB_APP matches), so this check fails without the change.",
+    "AC-6 e2e git grep -lE -- '-----BEGIN' HEAD; added lines in origin/main..HEAD: Only two files match, crates/server/tests/fixtures/access_test_key.pem and app_test_key_pkcs1.pem. No commit on the branch adds PEM or base64 key material (only .sdlc record text that mentions the grep).",
+    "AC-6 e2e argocd/README.md step 4.4 happy path, bash and fish, real board-server pod: Both shells: RSA key ok, secret patched, deployment restarted, rollout status succeeded, the grep found the 'reading GitHub as the GitHub App' app_id=123456 log line, then the .pem was removed (exit 0). Afterwards the Secret held all four keys. LINEAR_API_KEY and GITHUB_TOKEN digests were unchanged. GITHUB_APP_PRIVATE_KEY base64-decoded byte-for-byte equal to the PEM (cmp), and GITHUB_APP_ID was exactly '123456' with no newline. In the running container's /proc/<pid>/environ, GITHUB_APP_PRIVATE_KEY equalled the file's bytes and the other three values were present. The pod logged 'GITHUB_TOKEN is ignored: signing in as the GitHub App'.",
+    "AC-6 e2e argocd/README.md step 4.4 failure paths, bash and fish: mistyped .pem path, EC private key, RSA public key, empty file: All 8 runs stopped at openssl with exit 1 ('No such file', 'Not an RSA key', 'Could not read private key' x2). The Secret's resourceVersion stayed at 389 with only LINEAR_API_KEY and GITHUB_TOKEN. Deployment generation stayed 1 with no restartedAt, and the same pod kept running with 0 restarts. The .pem file was kept.",
+    "AC-6 e2e step 4.4 in fish with a mistyped App ID '12345O' (openssl passes): The patch was applied and the pod went to CrashLoopBackOff with 'Error: GITHUB_APP_ID isn't a number'. rollout status timed out after 2m, the chain stopped with exit 1 and the .pem was not removed.",
+    "AC-6 e2e argocd/README.md step 5 back-out, bash and fish: From the crash-looping state (fish) and from the working App state (bash), step 5 removed both GITHUB_APP keys and kept LINEAR_API_KEY and GITHUB_TOKEN unchanged. It restarted the deployment, the new pod came up 1/1 Running with 0 restarts, and its env had no GITHUB_APP_*.",
+    "AC-6 e2e README metrics check: kubectl -n sdlc-board port-forward deployment/sdlc-board 9091; curl -s localhost:9091/metrics | grep board_github_app_tokens_total: Port 9091 forwarded and served the board_github_app_tokens_total counter with result=\"ok\" and result=\"error\" series. error=4 here only because the sandbox can't reach api.github.com, so installation lookups failed.",
+    "AC-6 e2e README GITHUB_TOKEN removal block, then restart: The Secret was left with only LINEAR_API_KEY, and the pod started with both App keys and GITHUB_TOKEN missing, so the optional refs work. It logged the 'GITHUB_TOKEN is not set' warning."
+  ]
+}
