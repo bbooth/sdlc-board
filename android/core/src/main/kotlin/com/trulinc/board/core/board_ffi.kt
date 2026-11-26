@@ -772,9 +772,9 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_board_ffi_fn_constructor_board_new(`settings`: RustBuffer.ByValue,uniffi_out_err: Pointer, 
     ): Long
-    external fun uniffi_board_ffi_fn_method_board_refresh(`ptr`: Long,`asked`: Byte,uniffi_out_err: Pointer, 
+    external fun uniffi_board_ffi_fn_method_board_refresh(`ptr`: Long,`asked`: Byte,`nowMs`: Long,uniffi_out_err: Pointer, 
     ): Byte
-    external fun uniffi_board_ffi_fn_method_board_view(`ptr`: Long,uniffi_out_err: Pointer, 
+    external fun uniffi_board_ffi_fn_method_board_view(`ptr`: Long,`nowMs`: Long,uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
     external fun uniffi_board_ffi_fn_func_core_version(uniffi_out_err: Pointer, 
     ): RustBuffer.ByValue
@@ -910,10 +910,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_board_ffi_checksum_func_settings_trimmed() and 0xFFFF) != 43259) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_board_ffi_checksum_method_board_refresh() and 0xFFFF) != 40850) {
+    if ((lib.uniffi_board_ffi_checksum_method_board_refresh() and 0xFFFF) != 17366) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_board_ffi_checksum_method_board_view() and 0xFFFF) != 39481) {
+    if ((lib.uniffi_board_ffi_checksum_method_board_view() and 0xFFFF) != 9721) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_board_ffi_checksum_constructor_board_new() and 0xFFFF) != 16393) {
@@ -1102,6 +1102,29 @@ public object FfiConverterUInt: FfiConverter<UInt, Int> {
 /**
  * @suppress
  */
+public object FfiConverterULong: FfiConverter<ULong, Long> {
+    override fun lift(value: Long): ULong {
+        return value.toULong()
+    }
+
+    override fun read(buf: ByteBuffer): ULong {
+        return lift(buf.getLong())
+    }
+
+    override fun lower(value: ULong): Long {
+        return value.toLong()
+    }
+
+    override fun allocationSize(value: ULong) = 8UL
+
+    override fun write(value: ULong, buf: ByteBuffer) {
+        buf.putLong(value.toLong())
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterBoolean: FfiConverter<Boolean, Byte> {
     override fun lift(value: Byte): Boolean {
         return value.toInt() != 0
@@ -1284,13 +1307,17 @@ public interface BoardInterface {
      * Reads the snapshot if a read is due, or now if `asked` and none is
      * waiting, blocking up to `GIVE_UP`; call it off the main thread.
      * Returns whether it read. A failed read keeps the last board.
+     *
+     * `now_ms` is a clock that keeps counting while the phone sleeps
+     * (`SystemClock.elapsedRealtime()`): Rust's `Instant` stops then, so a
+     * board read before a night asleep would still look fresh.
      */
-    fun `refresh`(`asked`: kotlin.Boolean): kotlin.Boolean
+    fun `refresh`(`asked`: kotlin.Boolean, `nowMs`: kotlin.ULong): kotlin.Boolean
     
     /**
-     * What to show now.
+     * What to show at `now_ms`, on the same clock as [`Board::refresh`].
      */
-    fun `view`(): View
+    fun `view`(`nowMs`: kotlin.ULong): View
     
     companion object
 }
@@ -1418,14 +1445,19 @@ open class Board: Disposable, AutoCloseable, BoardInterface
      * Reads the snapshot if a read is due, or now if `asked` and none is
      * waiting, blocking up to `GIVE_UP`; call it off the main thread.
      * Returns whether it read. A failed read keeps the last board.
-     */override fun `refresh`(`asked`: kotlin.Boolean): kotlin.Boolean {
+     *
+     * `now_ms` is a clock that keeps counting while the phone sleeps
+     * (`SystemClock.elapsedRealtime()`): Rust's `Instant` stops then, so a
+     * board read before a night asleep would still look fresh.
+     */override fun `refresh`(`asked`: kotlin.Boolean, `nowMs`: kotlin.ULong): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithHandle {
     uniffiRustCall() { _status ->
     UniffiLib.uniffi_board_ffi_fn_method_board_refresh(
         it,
         
-        FfiConverterBoolean.lower(`asked`),_status)
+        FfiConverterBoolean.lower(`asked`),
+        FfiConverterULong.lower(`nowMs`),_status)
 }
     }
     )
@@ -1434,14 +1466,15 @@ open class Board: Disposable, AutoCloseable, BoardInterface
 
     
     /**
-     * What to show now.
-     */override fun `view`(): View {
+     * What to show at `now_ms`, on the same clock as [`Board::refresh`].
+     */override fun `view`(`nowMs`: kotlin.ULong): View {
             return FfiConverterTypeView.lift(
     callWithHandle {
     uniffiRustCall() { _status ->
     UniffiLib.uniffi_board_ffi_fn_method_board_view(
         it,
-        _status)
+        
+        FfiConverterULong.lower(`nowMs`),_status)
 }
     }
     )
@@ -1785,7 +1818,7 @@ public object FfiConverterTypeRolloutLine: FfiConverterRustBuffer<RolloutLine> {
 
 /**
  * Where to read the board and the Access service token to send: the
- * core's own type (its Debug hides the secret).
+ * core's own type. Rust's Debug hides the secret; Kotlin's toString doesn't.
  */
 data class Settings (
     var `url`: kotlin.String

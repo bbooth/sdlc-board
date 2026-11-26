@@ -52,11 +52,11 @@ class BoardTest {
     @Test
     fun aRecordedSnapshotReadsIntoColumnsWithNestedSubTickets() {
         val board = Board(Settings(url = " $url ", clientId = "id.access", clientSecret = "s3cret"))
-        assertTrue(board.refresh(false))
+        assertTrue(board.refresh(false, 0uL))
         assertTrue(userAgent.get()!!.startsWith("sdlc-board-android/"))
         assertEquals("id.access", accessId.get())
 
-        val view = board.view().board!!
+        val view = board.view(0uL).board!!
         assertEquals(listOf("Spec (0)", "Build (1)"), view.columns.map { it.title })
         val card = view.columns[1].cards.single()
         assertEquals("TRU-8", card.id)
@@ -71,26 +71,38 @@ class BoardTest {
     @Test
     fun aReadIsOnlyDueAfterTheRefreshIntervalUnlessAsked() {
         val board = Board(Settings(url, "", ""))
-        assertTrue(board.refresh(false))
-        assertEquals(false, board.refresh(false))
-        assertTrue(board.refresh(true))
-        assertEquals(2, reads.get())
+        assertTrue(board.refresh(false, 0uL))
+        assertEquals(false, board.refresh(false, 29_000uL))
+        assertTrue(board.refresh(true, 29_000uL))
+        assertTrue(board.refresh(false, 59_000uL))
+        assertEquals(3, reads.get())
+    }
+
+    // The app's clock counts the time the phone slept, so a night asleep shows.
+    @Test
+    fun aLongSleepMakesTheBoardOldAndDueAgain() {
+        val board = Board(Settings(url, "", ""))
+        board.refresh(false, 1_000uL)
+        val night = 2_000uL + 8uL * 3_600_000uL
+        assertEquals("Last refreshed: linear 8 h ago", board.view(night).board!!.refreshed)
+        assertTrue(board.refresh(false, night))
+        assertEquals("Last refreshed: linear 0 s ago", board.view(night).board!!.refreshed)
     }
 
     @Test
     fun aFailedReadKeepsTheLastBoardAndSaysWhy() {
         val board = Board(Settings(url, "", ""))
-        board.refresh(false)
-        val before = board.view().board
+        board.refresh(false, 0uL)
+        val before = board.view(0uL).board
         answer.set(401 to "")
-        assertTrue(board.refresh(true))
-        val after = board.view()
+        assertTrue(board.refresh(true, 0uL))
+        val after = board.view(0uL)
         assertEquals(before!!.columns, after.board!!.columns)
         assertEquals("the board needs an Access service token (it answered 401)", after.problem)
         server.stop(0)
-        board.refresh(true)
-        assertTrue(board.view().problem!!.startsWith("couldn't reach the board"))
-        assertNotNull(board.view().board)
+        board.refresh(true, 0uL)
+        assertTrue(board.view(0uL).problem!!.startsWith("couldn't reach the board"))
+        assertNotNull(board.view(0uL).board)
     }
 
     @Test

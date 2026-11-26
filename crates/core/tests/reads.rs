@@ -10,9 +10,9 @@ const SNAPSHOT: &str = r#"{"generated_at": 0, "sources": [], "columns": [{"stage
 fn a_failed_read_keeps_the_board_it_had() {
     let (mut reads, t) = (board_core::Reads::default(), Instant::now());
     let n = reads.start(t, false).unwrap();
-    reads.finish(n, Ok(serde_json::from_str(SNAPSHOT).unwrap()));
+    reads.finish(n, Ok(serde_json::from_str(SNAPSHOT).unwrap()), Instant::now());
     let n = reads.start(t + secs(30), false).unwrap();
-    reads.finish(n, Err("connection refused".into()));
+    reads.finish(n, Err("connection refused".into()), Instant::now());
     assert_eq!(reads.snap.as_ref().map(|s| s.columns.len()), Some(2));
     assert_eq!(reads.problem(t + secs(31)).as_deref(), Some("connection refused"));
 }
@@ -26,16 +26,16 @@ fn ages_go_by_the_servers_clock() {
     let n = reads.start(Instant::now(), false).unwrap();
     let mut snap: board_api::Snapshot = serde_json::from_str(SNAPSHOT).unwrap();
     snap.generated_at = 5000;
-    reads.finish(n, Ok(snap.clone()));
+    reads.finish(n, Ok(snap.clone()), Instant::now());
     assert_eq!(reads.server_now(Instant::now() + secs(90)), Some(5090));
     // A later board resets the reference: its own time, counted from when it came back.
     let n = reads.start(Instant::now(), true).unwrap();
     snap.generated_at = 9000;
-    reads.finish(n, Ok(snap));
+    reads.finish(n, Ok(snap), Instant::now());
     assert_eq!(reads.server_now(Instant::now() + secs(5)), Some(9005));
     // A failed read keeps the board's reference.
     let n = reads.start(Instant::now(), true).unwrap();
-    reads.finish(n, Err("refused".into()));
+    reads.finish(n, Err("refused".into()), Instant::now());
     assert_eq!(reads.server_now(Instant::now() + secs(5)), Some(9005));
 }
 
@@ -52,20 +52,20 @@ fn the_board_refreshes_itself_every_30_seconds() {
     let first = reads.start(t, false).unwrap();
     assert!(reads.waiting(t + secs(10)));
     assert_eq!(reads.start(t + secs(10), true), None, "Refresh waits for the answer");
-    reads.finish(first, Err("refused".into()));
+    reads.finish(first, Err("refused".into()), Instant::now());
     assert_eq!(reads.start(t + secs(20), false), None);
     let asked = reads.start(t + secs(21), true).expect("Refresh reads now once answered");
-    reads.finish(asked, Err("refused".into()));
+    reads.finish(asked, Err("refused".into()), Instant::now());
     let hung = reads.start(t + secs(51), false).unwrap();
     assert_eq!(reads.problem(t + secs(76)).as_deref(), Some("no answer for 25 s"));
     assert!(!reads.waiting(t + secs(76)));
     let next = reads.start(t + secs(81), false).unwrap();
-    reads.finish(next, Ok(serde_json::from_str(SNAPSHOT).unwrap()));
-    reads.finish(hung, Err("late".into()));
+    reads.finish(next, Ok(serde_json::from_str(SNAPSHOT).unwrap()), Instant::now());
+    reads.finish(hung, Err("late".into()), Instant::now());
     assert_eq!((reads.snap.is_some(), reads.problem(t + secs(82))), (true, None));
     // A given-up read's answer still counts when nothing newer has answered.
     let slow = reads.start(t + secs(111), false).unwrap();
     let _hangs = reads.start(t + secs(141), false).unwrap();
-    reads.finish(slow, Err("slow but real".into()));
+    reads.finish(slow, Err("slow but real".into()), Instant::now());
     assert_eq!(reads.problem(t + secs(142)).as_deref(), Some("slow but real"));
 }

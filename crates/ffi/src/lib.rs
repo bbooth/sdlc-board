@@ -6,14 +6,14 @@
 use board_api::{Snapshot, Ticket};
 use board_core::{words, Reads};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 uniffi::setup_scaffolding!();
 
 pub use board_core::Settings;
 
 /// Where to read the board and the Access service token to send: the
-/// core's own type (its Debug hides the secret).
+/// core's own type. Rust's Debug hides the secret; Kotlin's toString doesn't.
 #[uniffi::remote(Record)]
 pub struct Settings {
     pub url: String,
@@ -44,38 +44,49 @@ pub fn core_version() -> String {
 pub struct Board {
     settings: Settings,
     reads: Mutex<Reads>,
+    /// Where the app's clock reads 0: see [`Board::refresh`].
+    origin: Instant,
 }
 
 #[uniffi::export]
 impl Board {
     #[uniffi::constructor]
     pub fn new(settings: Settings) -> Arc<Board> {
-        Arc::new(Board { settings: settings.trimmed(), reads: Mutex::default() })
+        Arc::new(Board { settings: settings.trimmed(), reads: Mutex::default(), origin: Instant::now() })
     }
 
     /// Reads the snapshot if a read is due, or now if `asked` and none is
     /// waiting, blocking up to `GIVE_UP`; call it off the main thread.
     /// Returns whether it read. A failed read keeps the last board.
-    pub fn refresh(&self, asked: bool) -> bool {
-        let Some(n) = self.reads().start(Instant::now(), asked) else {
+    ///
+    /// `now_ms` is a clock that keeps counting while the phone sleeps
+    /// (`SystemClock.elapsedRealtime()`): Rust's `Instant` stops then, so a
+    /// board read before a night asleep would still look fresh.
+    pub fn refresh(&self, asked: bool, now_ms: u64) -> bool {
+        let Some(n) = self.reads().start(self.at(now_ms), asked) else {
             return false;
         };
         // Not under the lock: the view stays readable while this waits.
+        let took = Instant::now();
         let read = board_core::read(&self.settings, "android").map_err(|e| e.to_string());
-        self.reads().finish(n, read);
+        self.reads().finish(n, read, self.at(now_ms) + took.elapsed());
         true
     }
 
-    /// What to show now.
-    pub fn view(&self) -> View {
+    /// What to show at `now_ms`, on the same clock as [`Board::refresh`].
+    pub fn view(&self, now_ms: u64) -> View {
         let reads = self.reads();
-        let now = Instant::now();
+        let now = self.at(now_ms);
         let board = reads.snap.as_ref().map(|s| board_view(s, reads.server_now(now).unwrap_or(s.generated_at)));
         View { board, problem: reads.problem(now), waiting: reads.waiting(now) }
     }
 }
 
 impl Board {
+    fn at(&self, now_ms: u64) -> Instant {
+        self.origin + Duration::from_millis(now_ms)
+    }
+
     fn reads(&self) -> MutexGuard<'_, Reads> {
         self.reads.lock().unwrap_or_else(|e| e.into_inner())
     }
