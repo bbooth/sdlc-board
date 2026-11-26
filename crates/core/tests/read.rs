@@ -1,7 +1,8 @@
-use board_core::{read, ReadError, Settings};
+use board_core::{read, read_within, ReadError, Settings};
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 const BOARD: &str = r#"{"generated_at": 7, "sources": [], "columns": []}"#;
 
@@ -19,7 +20,7 @@ fn serve(answer: Option<&'static str>) -> (String, JoinHandle<String>) {
         }
         match answer {
             Some(a) => conn.write_all(a.as_bytes()).unwrap(),
-            None => std::thread::sleep(std::time::Duration::from_secs(25)),
+            None => std::thread::sleep(Duration::from_secs(3)),
         }
         String::from_utf8(req).unwrap().to_ascii_lowercase()
     });
@@ -54,7 +55,15 @@ fn a_refused_token_says_access_refused_it() {
     let (url, _server) = serve(Some("HTTP/1.1 401 Unauthorized\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"));
     let err = read(&token(url), "native").unwrap_err();
     assert_eq!(err, ReadError::Refused(401, "Unauthorized".into()));
-    assert_eq!(err.to_string(), "Cloudflare Access refused the service token");
+    assert_eq!(err.to_string(), "Cloudflare Access or the board refused the service token");
+}
+
+#[test]
+fn a_login_asked_for_without_a_token_says_one_is_needed() {
+    let (url, _server) = serve(Some("HTTP/1.1 401 Unauthorized\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"));
+    let err = read(&Settings { url, ..Default::default() }, "native").unwrap_err();
+    assert_eq!(err, ReadError::NeedsToken(401));
+    assert_eq!(err.to_string(), "the board needs an Access service token (it answered 401)");
 }
 
 #[test]
@@ -82,8 +91,8 @@ fn a_server_that_isnt_there_is_unreachable() {
 #[test]
 fn a_server_that_never_answers_times_out() {
     let (url, _server) = serve(None);
-    let err = read(&token(url), "native").unwrap_err();
-    assert_eq!((err.to_string(), err), ("no answer within 20 s".into(), ReadError::TimedOut));
+    let err = read_within(&token(url), "native", Duration::from_secs(1)).unwrap_err();
+    assert_eq!((err.to_string(), err), ("no answer in time".into(), ReadError::TimedOut));
 }
 
 #[test]

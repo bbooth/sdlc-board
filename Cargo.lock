@@ -618,7 +618,6 @@ dependencies = [
  "board-api",
  "serde",
  "serde_json",
- "tempfile",
  "ureq",
  "web-time",
 ]

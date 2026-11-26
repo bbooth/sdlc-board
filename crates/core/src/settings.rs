@@ -1,10 +1,7 @@
 //! Where a client reads the board, and the Cloudflare Access service token
-//! it sends. The native app takes them from the environment; the Android app
-//! has them entered once and keeps them in its own storage.
+//! it sends. The native app takes them from the environment.
 
 use serde::{Deserialize, Serialize};
-use std::io;
-use std::path::Path;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -49,25 +46,5 @@ impl Settings {
             }
             _ => Err("set both the Access client ID and secret, or neither".into()),
         }
-    }
-
-    /// The settings saved at `path`, or `None` if none have been saved.
-    pub fn load(path: &Path) -> io::Result<Option<Settings>> {
-        match std::fs::read(path) {
-            Ok(b) => serde_json::from_slice(&b).map(Some).map_err(io::Error::other),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Checks and saves the trimmed settings to `path`, whole or not at all:
-    /// a crash mid-write leaves the old settings, not a torn file.
-    pub fn save(&self, path: &Path) -> Result<Settings, String> {
-        let s = self.trimmed();
-        s.check()?;
-        let tmp = path.with_extension("tmp");
-        let write = || std::fs::write(&tmp, serde_json::to_vec(&s)?).and_then(|_| std::fs::rename(&tmp, path));
-        write().map_err(|e| format!("saving the settings: {e}"))?;
-        Ok(s)
     }
 }
