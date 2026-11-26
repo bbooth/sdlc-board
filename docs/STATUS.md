@@ -57,6 +57,21 @@
   `kubectl proxy`) without a token; without it, or a cluster, rollouts
   aren't read.
 
+- TRU-18 (part of TRU-17): the server can sign in to GitHub as a
+  read-only GitHub App, so private repos' checks show. Set
+  `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` (the App's PEM key); it
+  then reads every minute with a read-only token scoped to each repo,
+  replaced in its last five minutes (the old one serves until it expires
+  if a new one can't be got). A reinstalled App or a revoked token
+  recovers on the next read, without a restart. A repo the App isn't
+  installed on fails alone ("the GitHub App isn't installed on ..."). One
+  setting without the other, or a key that doesn't parse, stops the server
+  at start. With the App set, `GITHUB_TOKEN` is ignored with a warning;
+  without it, the token or tokenless reads work as before.
+  `board_github_app_tokens_total{result}` counts the tokens got, and every
+  failure to get one, a failed installation lookup included. The chart
+  and the App's one-time setup come in TRU-19.
+
 ## Next
 
 - TRU-13 (Android).

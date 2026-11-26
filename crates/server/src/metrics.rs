@@ -13,6 +13,7 @@ pub struct Metrics {
     age: GaugeVec,
     requests: IntCounterVec,
     request_duration: HistogramVec,
+    app_tokens: IntCounterVec,
 }
 
 impl Default for Metrics {
@@ -28,6 +29,13 @@ impl Default for Metrics {
             age: gauge!("board_source_age_seconds", "Seconds since the source's last good read.", s, r).unwrap(),
             requests: counter!("board_http_requests_total", "HTTP requests.", &["route", "status"], r).unwrap(),
             request_duration: histogram!("board_http_request_duration_seconds", "HTTP time.", &["route"], r).unwrap(),
+            app_tokens: counter!(
+                "board_github_app_tokens_total",
+                "GitHub App installation tokens got.",
+                &["result"],
+                r
+            )
+            .unwrap(),
             registry: r,
         }
     }
@@ -39,6 +47,17 @@ impl Metrics {
         // Touch the error counter so it's exported at 0 before the first failure.
         self.errors.with_label_values(&[source]).inc_by(u64::from(!ok));
         self.duration.with_label_values(&[source]).observe(secs);
+    }
+
+    pub fn app_token(&self, ok: bool) {
+        self.app_tokens.with_label_values(&[if ok { "ok" } else { "error" }]).inc();
+    }
+
+    /// Exports both results at 0, so a failure shows as a change, not a new series.
+    pub fn touch_app_tokens(&self) {
+        for result in ["ok", "error"] {
+            self.app_tokens.with_label_values(&[result]);
+        }
     }
 
     pub fn request(&self, route: &str, status: u16, secs: f64) {

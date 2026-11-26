@@ -7,6 +7,7 @@ pub mod cluster;
 pub mod config;
 pub mod gates;
 pub mod github;
+pub mod github_app;
 pub mod linear;
 pub mod metrics;
 pub mod routes;

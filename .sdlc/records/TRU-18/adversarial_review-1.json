@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-18",
+  "round": 1,
+  "result": "fail",
+  "recorded_at": "2026-11-25T20:02:27.117Z",
+  "inputs": {
+    "branch": "feat/tru-18-github-app",
+    "commit": "576a32a",
+    "verify_record": ".sdlc/records/TRU-18/verify-1.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-18/verify-1.json says pass at d8aee20"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since d8aee20"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 576a32a"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read 576a32a"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, operability"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "4 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "2 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": false,
+      "detail": "2 stand: [operability] crates/server/src/github_app.rs:100: a repo's installation ID is cached for good and never dropped when a token mint fails. If the owner uninstalls and reinstalls the App, or the installation is deleted and made again, the installation gets a new ID. mint() then POSTs /app/installations/<old id>/access_tokens on every read and gets 404, and every repo on that owner stays in repos_failed with 'GitHub /app/installations/N/access_tokens: 404 Not Found' (not 'the GitHub App isn't installed on ...') until the pod restarts. Drop the cached installation, and its token, when mint returns 404 or 401, so the next read looks it up again.; [operability] crates/server/src/github_app.rs:105: a failed installation lookup is never counted in board_github_app_tokens_total. Only mint() calls app_token() (line 93). Start validation only proves the key can sign, so a wrong GITHUB_APP_ID, clock skew that makes GitHub reject the JWT, or a 5xx on GET /repos/{repo}/installation all fail before mint() runs. Every repo then fails while result=\"error\" stays at 0, and AC-2 says that series is the signal for failing to get a token. Count the lookup's failure as result=\"error\" too (a 404 "
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github_app.rs:112: mint() POSTs /app/installations/{id}/access_tokens with no body, so each installation token covers every repo the installation can reach (all of an owner's repos when the App is installed with 'All repositories') with all the App's permissions. Only the repos in board.toml are read. Asking for just those repos and read-only permissions in the request body would mean a leaked token, or a mistake in the path-to-repo split in github.rs:131, reaches nothing beyond the board's repos. The App is read-only, so a leaked token can still only read.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/github_app.rs:100: a repo's installation ID is cached for good and never dropped when a token mint fails. If the owner uninstalls and reinstalls the App, or the installation is deleted and made again, the installation gets a new ID. mint() then POSTs /app/installations/<old id>/access_tokens on every read and gets 404, and every repo on that owner stays in repos_failed with 'GitHub /app/installations/N/access_tokens: 404 Not Found' (not 'the GitHub App isn't installed on ...') until the pod restarts. Drop the cached installation, and its token, when mint returns 404 or 401, so the next read looks it up again.",
+      "status": "open",
+      "scope": "operability",
+      "reason": "installations is only ever written (github_app.rs:111) and read (:101); nothing in crates/server/src removes an entry, and AppAuth is built once in main.rs:44 and lives for the process. token() (:87-94) passes the cached ID straight to mint(), whose error is the generic 'GitHub {path}: {e}' from :119. A reinstalled App gets a new installation ID, so the path the finding describes can happen and lasts until a restart.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/server/src/github_app.rs:105: a failed installation lookup is never counted in board_github_app_tokens_total. Only mint() calls app_token() (line 93). Start validation only proves the key can sign, so a wrong GITHUB_APP_ID, clock skew that makes GitHub reject the JWT, or a 5xx on GET /repos/{repo}/installation all fail before mint() runs. Every repo then fails while result=\"error\" stays at 0, and AC-2 says that series is the signal for failing to get a token. Count the lookup's failure as result=\"error\" too (a 404 for 'not installed' can stay out of it).",
+      "status": "open",
+      "scope": "operability",
+      "reason": "metrics.app_token is called only at github_app.rs:93, after installation() at :87 has returned Ok; the `?` at :87 returns lookup errors (JWT signing, send failure, 401 or 5xx at :109) before that line. Settings::from_values (:41-56) only checks that the key can sign and never tests the App ID against GitHub, so a wrong GITHUB_APP_ID fails every repo at the lookup while result=\"error\" stays at 0. Smaller than claimed in one way: a lookup succeeds once per repo and is then cached, so after the first good read, later failures happen in mint() and are counted. The wrong-ID and first-read failures still go uncounted.",
+      "judged": "confirmed"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/server/src/github.rs:131: when a repo read is rejected with 401, the cached installation token isn't dropped. AppAuth::token goes on handing out the same token until 5 minutes before its expires_at, so a token GitHub revoked early (installation suspended, permissions changed) fails that installation's repos for up to about 55 minutes before a new one is minted.",
+      "status": "open",
+      "scope": "operability"
+    }
+  ],
+  "decision": "Back to Build: fix what stands, then Build, Verify and review again",
+  "evidence": []
+}

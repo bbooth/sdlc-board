@@ -1,0 +1,142 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-18",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-25T20:31:56.077Z",
+  "inputs": {
+    "branch": "feat/tru-18-github-app",
+    "commit": "594207e",
+    "build_record": ".sdlc/records/TRU-18/build-2.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-18/build-2.json says pass at c48936d"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since c48936d"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 594207e"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 594207e"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-1, AC-2, AC-3, AC-4, AC-5"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "13 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "8 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/server/tests/github_app.rs:a_private_repo_reads_as_the_app_every_minute passed: cargo test -p board-server --test github_app a_private_repo_reads_as_the_app_every_minute -- --exact"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/github_app.rs:a_token_in_its_last_five_minutes_is_replaced_and_every_token_is_counted passed: cargo test -p board-server --test github_app a_token_in_its_last_five_minutes_is_replaced_and_every_token_is_counted -- --exact"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/server/tests/github_app.rs:a_failed_lookup_counts_and_a_reinstalled_or_revoked_app_recovers passed: cargo test -p board-server --test github_app a_failed_lookup_counts_and_a_reinstalled_or_revoked_app_recovers -- --exact"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/server/tests/github_app.rs:a_repo_the_app_isnt_on_fails_alone_and_no_secret_shows passed: cargo test -p board-server --test github_app a_repo_the_app_isnt_on_fails_alone_and_no_secret_shows -- --exact"
+    },
+    {
+      "name": "rerun:AC-4",
+      "pass": true,
+      "detail": "crates/server/tests/github_app.rs:bad_app_settings_name_the_setting_and_never_the_key passed: cargo test -p board-server --test github_app bad_app_settings_name_the_setting_and_never_the_key -- --exact"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/server/tests/github.rs:without_a_token_reads_are_spaced_by_what_they_cost passed: cargo test -p board-server --test github without_a_token_reads_are_spaced_by_what_they_cost -- --exact"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/server/tests/github_app.rs:without_an_app_the_personal_token_is_sent passed: cargo test -p board-server --test github_app without_an_app_the_personal_token_is_sent -- --exact"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/server/tests/github_app.rs:a_personal_token_beside_the_app_is_ignored_with_a_warning passed: cargo test -p board-server --test github_app a_personal_token_beside_the_app_is_ignored_with_a_warning -- --exact"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "3 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github_app.rs:55: no test covers the check that signs once in Settings::from_values (\"can't sign: is it the App's RSA key?\"). Replacing that line with a no-op left all 8 github_app tests passing. The e2e run showed that it works: a public key exits naming GITHUB_APP_PRIVATE_KEY."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github_app.rs:52: a key passed with literal \\n escapes (a common shape for one-line env secrets) is rejected as 'isn't an RSA private key in PEM form'. The error is correct and names the setting, but TRU-19's chart and setup docs need to pass a real multi-line PEM."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/github_app.rs:91: token() holds the tokens mutex across the installation lookup and mint calls, so a slow token endpoint (20 s timeout) holds up every repo's reads, not just the one being refreshed."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-1 test crates/server/tests/github_app.rs:a_private_repo_reads_as_the_app_every_minute: PASS; FAILS with interval() checking only Auth::Token",
+    "AC-1 e2e cargo-built board-server with GITHUB_APP_ID=42 and the fixture key, then GET /v1/snapshot: The fake logged GET /repos/bbooth/secret/installation with the JWT (200), POST /app/installations/7/access_tokens (201), then pulls, check-runs and .sdlc/records contents with ghs_e2etoken1 (200). The snapshot's TRU-5 card has pr #1 with checks 'pass' and gate Verify round 1 pass (the latest of build-1 and verify-1). GitHub reads ran at 20:20:09, 20:21:09 and 20:22:09, one minute apart.",
+    "AC-2 test crates/server/tests/github_app.rs:a_token_in_its_last_five_minutes_is_replaced_and_every_token_is_counted: PASS; FAILS with MARGIN=0, RETRY=0, or app_token(true)",
+    "AC-2 test crates/server/tests/github_app.rs:a_failed_lookup_counts_and_a_reinstalled_or_revoked_app_recovers: PASS; FAILS without forget() on 401 or without clearing the cached installation on a 404 or 401 mint",
+    "AC-2 e2e the running board-server's /metrics and the fake's request log over 9 minutes: result=\"ok\" went 1 -> 2 -> 4 -> 5 as tokens were replaced (ghs_e2etoken1..5). A mint 500 gave error=1 while reads kept serving with the old token. Revoke plus mint 500 gave error=3 and a failed read, then recovery. Reinstall gave a 404 mint, then a lookup and installation 8's token. A wrong App ID took error from 4 to 8.",
+    "AC-3 test crates/server/tests/github_app.rs:a_repo_the_app_isnt_on_fails_alone_and_no_secret_shows: PASS; FAILS when the message is reworded",
+    "AC-3 e2e board.toml with bbooth/secret and bbooth/elsewhere; GET /v1/snapshot: The github source's last_error was \"PR lists failed for bbooth/elsewhere; 1 reads failed, first: the GitHub App isn't installed on bbooth/elsewhere\", and bbooth/secret's PR still showed. The log warned 'reading the repo's PRs failed' for repo bbooth/elsewhere only.",
+    "AC-4 test crates/server/tests/github_app.rs:bad_app_settings_name_the_setting_and_never_the_key: PASS",
+    "AC-4 e2e board-server started with bad App settings: exit=1 every time. ID without a key: 'Error: GITHUB_APP_ID is set but GITHUB_APP_PRIVATE_KEY isn't'. Key without an ID: 'GITHUB_APP_PRIVATE_KEY is set but GITHUB_APP_ID isn't'. ID 'abc' or '-1': 'GITHUB_APP_ID isn't a number'. Corrupted PEM or 'sekrit-not-a-key': 'GITHUB_APP_PRIVATE_KEY isn't an RSA private key in PEM form'. The public key in place of the private one: 'GITHUB_APP_PRIVATE_KEY can't sign: is it the App's RSA key?'. None of these printed the key.",
+    "AC-5 test crates/server/tests/github.rs:without_a_token_reads_are_spaced_by_what_they_cost: PASS",
+    "AC-5 test crates/server/tests/github_app.rs:without_an_app_the_personal_token_is_sent: PASS",
+    "AC-5 test crates/server/tests/github_app.rs:a_personal_token_beside_the_app_is_ignored_with_a_warning: PASS; FAILS with the warning removed",
+    "AC-5 e2e board-server with GITHUB_TOKEN only, with neither set, and with both set: GITHUB_TOKEN only: the fake logged auth=github_pat_e2e on the repo reads. Neither set: auth=none, plus the 'GITHUB_TOKEN is not set' warning. Both set: the WARN 'GITHUB_TOKEN is ignored: signing in as the GitHub App', and every repo read carried a ghs_ installation token."
+  ]
+}

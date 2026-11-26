@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-18",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-25T20:12:04.215Z",
+  "inputs": {
+    "branch": "feat/tru-18-github-app",
+    "commit": "c48936d"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-18-github-app"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "12 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "2 test files changed with 5 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "476 lines changed, counting 378 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at c48936d"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "8 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/github_app.rs:112: mint() POSTs /app/installations/{id}/access_tokens with no body, so each installation token covers every repo the installation can reach (all of an owner's repos when the App is installed with 'All repositories') with all the App's permissions. Only the repos in board.toml are read. Asking for just those repos and read-only permissions in the request body would mean a leaked token, or a mistake in the path-to-repo split in github.rs:131, reaches nothing beyond the board's repos. The App is read-only, so a leaked token can still only read."
+    },
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/server/src/github_app.rs:100: a repo's installation ID is cached for good and never dropped when a token mint fails. If the owner uninstalls and reinstalls the App, or the installation is deleted and made again, the installation gets a new ID. mint() then POSTs /app/installations/<old id>/access_tokens on every read and gets 404, and every repo on that owner stays in repos_failed with 'GitHub /app/installations/N/access_tokens: 404 Not Found' (not 'the GitHub App isn't installed on ...') until the pod restarts. Drop the cached installation, and its token, when mint returns 404 or 401, so the next read looks it up again."
+    },
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/server/src/github_app.rs:105: a failed installation lookup is never counted in board_github_app_tokens_total. Only mint() calls app_token() (line 93). Start validation only proves the key can sign, so a wrong GITHUB_APP_ID, clock skew that makes GitHub reject the JWT, or a 5xx on GET /repos/{repo}/installation all fail before mint() runs. Every repo then fails while result=\"error\" stays at 0, and AC-2 says that series is the signal for failing to get a token. Count the lookup's failure as result=\"error\" too (a 404 for 'not installed' can stay out of it)."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/github.rs:131: when a repo read is rejected with 401, the cached installation token isn't dropped. AppAuth::token goes on handing out the same token until 5 minutes before its expires_at, so a token GitHub revoked early (installation suspended, permissions changed) fails that installation's repos for up to about 55 minutes before a new one is minted."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/tests/github_app.rs:an_expiring_token_is_replaced_and_every_token_is_counted: the test plan says a token 'within the 5 minute margin' is replaced, but the fake's EXPIRED token expires in 2000. With MARGIN set to 0 in github_app.rs, all 6 tests still pass. The margin does work (my scratch test: a token 200 s out was replaced, one 400 s out was kept), but nothing guards it. A mode that mints a token expiring a few minutes out would."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "Test plan for AC-5 says the tests/github.rs cases pass with Auth::Token; every GitHub::new there passes None. No test asserts the personal token is sent as the bearer (seen only in my e2e run)."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/github_app.rs token(): if getting a new token fails while the cached one is inside the 5-minute margin but still valid, the read fails instead of using the cached token. Seen in e2e: a 500 from access_tokens failed bbooth/secret's read while its last token still had about 270 s to live."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/server/src/github_app.rs:95: once a repo's token is inside its 5-minute margin, every get() calls fresh() again, even when the last attempt failed a moment ago. Nothing backs off; each attempt adds to board_github_app_tokens_total{result=\"error\"}, so the count tracks request volume. Remember a failed attempt for about a minute while a live token exists."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
