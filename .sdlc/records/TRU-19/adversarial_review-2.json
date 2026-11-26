@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-19",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-26T05:43:50.881Z",
+  "inputs": {
+    "branch": "feat/tru-19-app-deploy",
+    "commit": "0942645",
+    "verify_record": ".sdlc/records/TRU-19/verify-2.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-19/verify-2.json says pass at bb6dc0d"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since bb6dc0d"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 0942645"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read 0942645"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, operability"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "2 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "0 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "0 blocking findings refuted, 2 minor carried to the PR"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "argocd/README.md:57: the only `rm <downloaded>.pem` is at the end of the `&&` chain, so it runs only if every step before it worked. If the key check, the patch or the rollout fails, or if the final `grep` misses the 'reading GitHub as the GitHub App' line (for example when the log line hasn't been written yet), the App's private key stays in the owner's downloads folder. The back-out step (lines 67-74) sends the owner off without deleting it either. Nothing in the README tells them to delete the PEM after a failed or partial run. Fix: make deleting the PEM a separate step that runs whatever the chain's result, or say so in the back-out step.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "argocd/README.md:78: The README's last step tells the owner to remove GITHUB_TOKEN from sdlc-board-tokens once the App works, but it doesn't restart the pod afterwards. The server reads its environment only at start (crates/server/src/main.rs:33), and the chart's checksum/config annotation covers only .Values, not the Secret. So the running pod keeps the old token and the 'GITHUB_TOKEN is ignored: signing in as the GitHub App' warning that step 4's restart logged. Take an owner who follows the README in order and then runs the ticket's outcome check ('the pod logs no token warning'): they still see the warning, and it stays until something else restarts the pod. Fix: add `&& kubectl -n sdlc-board rollout restart deployment sdlc-board` to that command, or say that the warning clears at the next restart.",
+      "status": "open",
+      "scope": "operability"
+    }
+  ],
+  "decision": "Open the PR and advance to PR review",
+  "evidence": []
+}
