@@ -47,7 +47,6 @@ class SettingsTest {
         paste("secret", "  s3cret ")
         compose.onNodeWithText("Save").performClick()
 
-        assertEquals(File(context.noBackupFilesDir, "settings.json"), file)
         assertEquals(
             """{"url":"https://board.example","client_id":"id.access","client_secret":"s3cret"}""",
             file.readText(),

@@ -1956,6 +1956,16 @@ data class View (
     var `problem`: kotlin.String?
     , 
     /**
+     * [`View::problem`] as the line to show: "Couldn't refresh from …: …".
+     */
+    var `problemLine`: kotlin.String?
+    , 
+    /**
+     * What to show while there's no board: loading, or when the next read is due.
+     */
+    var `placeholder`: kotlin.String?
+    , 
+    /**
      * Whether a read is waiting on its answer.
      */
     var `waiting`: kotlin.Boolean
@@ -1977,6 +1987,8 @@ public object FfiConverterTypeView: FfiConverterRustBuffer<View> {
         return View(
             FfiConverterOptionalTypeBoardView.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
         )
     }
@@ -1984,12 +1996,16 @@ public object FfiConverterTypeView: FfiConverterRustBuffer<View> {
     override fun allocationSize(value: View) = (
             FfiConverterOptionalTypeBoardView.allocationSize(value.`board`) +
             FfiConverterOptionalString.allocationSize(value.`problem`) +
+            FfiConverterOptionalString.allocationSize(value.`problemLine`) +
+            FfiConverterOptionalString.allocationSize(value.`placeholder`) +
             FfiConverterBoolean.allocationSize(value.`waiting`)
     )
 
     override fun write(value: View, buf: ByteBuffer) {
             FfiConverterOptionalTypeBoardView.write(value.`board`, buf)
             FfiConverterOptionalString.write(value.`problem`, buf)
+            FfiConverterOptionalString.write(value.`problemLine`, buf)
+            FfiConverterOptionalString.write(value.`placeholder`, buf)
             FfiConverterBoolean.write(value.`waiting`, buf)
     }
 }

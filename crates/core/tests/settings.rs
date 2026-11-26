@@ -41,6 +41,7 @@ fn a_token_needs_an_https_address() {
     let refused = "use an https:// address, so the Access token isn't sent in the clear";
     assert_eq!(http("http://board.example").unwrap_err(), refused);
     assert_eq!(http("http://localhost.example:8080").unwrap_err(), refused);
+    assert_eq!(http("http://localhost:x@board.example/").unwrap_err(), refused);
     assert_eq!(http("http://127.0.0.1:8080"), Ok(()));
     assert_eq!(http("http://localhost/"), Ok(()));
     assert_eq!(Settings { url: "http://board.example".into(), ..Default::default() }.check(), Ok(()));

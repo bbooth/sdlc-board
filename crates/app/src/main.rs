@@ -119,15 +119,14 @@ impl eframe::App for BoardApp {
                     self.fetch(&ctx, true);
                 }
                 if let Some(e) = &problem {
-                    let msg = format!("Couldn't refresh from {}: {e}", self.settings.url);
+                    let msg = board_core::words::couldnt_refresh(&self.settings.url, e);
                     ui.colored_label(ui.visuals().error_fg_color, msg);
                 }
             });
         });
-        egui::CentralPanel::default().show(ui, |ui| match (&snap, &problem) {
-            (Some(snap), _) => board_app::board(ui, snap, now),
-            (None, Some(_)) => drop(ui.label("No board yet: the next read is due within 30 s.")),
-            (None, None) => drop(ui.label(format!("Loading from {}…", self.settings.url))),
+        egui::CentralPanel::default().show(ui, |ui| match &snap {
+            Some(snap) => board_app::board(ui, snap, now),
+            None => drop(ui.label(board_core::words::no_board(&self.settings.url, problem.is_some()))),
         });
     }
 }

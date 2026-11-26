@@ -92,7 +92,14 @@ impl Board {
         let reads = self.reads();
         let now = self.at(now_ms);
         let board = reads.snap.as_ref().map(|s| board_view(s, reads.server_now(now).unwrap_or(s.generated_at)));
-        View { board, problem: reads.problem(now), waiting: reads.waiting(now) }
+        let problem = reads.problem(now);
+        View {
+            problem_line: problem.as_deref().map(|p| words::couldnt_refresh(&self.settings.url, p)),
+            placeholder: board.is_none().then(|| words::no_board(&self.settings.url, problem.is_some())),
+            board,
+            problem,
+            waiting: reads.waiting(now),
+        }
     }
 }
 
@@ -112,6 +119,10 @@ pub struct View {
     pub board: Option<BoardView>,
     /// Why the board may be out of date: the last read failed, or hasn't answered.
     pub problem: Option<String>,
+    /// [`View::problem`] as the line to show: "Couldn't refresh from …: …".
+    pub problem_line: Option<String>,
+    /// What to show while there's no board: loading, or when the next read is due.
+    pub placeholder: Option<String>,
     /// Whether a read is waiting on its answer.
     pub waiting: bool,
 }

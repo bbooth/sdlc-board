@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -41,7 +42,8 @@ fun SettingsScreen(
 ) {
     var url by rememberSaveable { mutableStateOf(saved?.url ?: "https://board.trulinc.com") }
     var clientId by rememberSaveable { mutableStateOf(saved?.clientId ?: "") }
-    var secret by rememberSaveable { mutableStateOf(saved?.clientSecret ?: "") }
+    // Not saveable: a saved-state Bundle leaves the app's own storage.
+    var secret by remember { mutableStateOf(saved?.clientSecret ?: "") }
     var problem by rememberSaveable { mutableStateOf<String?>(null) }
     Column(
         modifier.verticalScroll(rememberScrollState()).imePadding().padding(16.dp),
@@ -69,17 +71,16 @@ fun SettingsScreen(
  * itself is laid out in TRU-31; for now, its refresh line and columns.
  */
 @Composable
-fun BoardScreen(view: View?, url: String, onRefresh: () -> Unit, onSettings: () -> Unit, modifier: Modifier = Modifier) {
+fun BoardScreen(view: View?, onRefresh: () -> Unit, onSettings: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onRefresh, enabled = view?.waiting != true) { Text(if (view?.waiting == true) "Reading…" else "Refresh") }
             OutlinedButton(onSettings) { Text("Settings") }
         }
-        view?.problem?.let { Text("Couldn't refresh from $url: $it", color = MaterialTheme.colorScheme.error) }
+        view?.problemLine?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        view?.placeholder?.let { Text(it) }
         val board = view?.board
-        if (board == null) {
-            Text(if (view?.problem == null) "Loading from $url…" else "No board yet: the next read is due within 30 s.")
-        } else {
+        if (board != null) {
             Text(board.refreshed, style = MaterialTheme.typography.bodySmall)
             board.columns.forEach { Text(it.title) }
         }

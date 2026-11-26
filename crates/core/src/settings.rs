@@ -9,8 +9,9 @@ use std::path::Path;
 
 /// Whether `url` is this device, where plain http can't be overheard.
 fn local(url: &str) -> bool {
-    let host = url.strip_prefix("http://").unwrap_or("").split(['/', ':']).next();
-    matches!(host, Some("localhost" | "127.0.0.1"))
+    let authority = url.strip_prefix("http://").unwrap_or("").split(['/', '?', '#']).next().unwrap_or("");
+    // A user part ("localhost@elsewhere") would make the host elsewhere.
+    !authority.contains('@') && matches!(authority.split(':').next(), Some("localhost" | "127.0.0.1"))
 }
 
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

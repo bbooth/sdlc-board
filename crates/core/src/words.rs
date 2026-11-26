@@ -1,6 +1,21 @@
 //! How the board's lines are worded, so every client says the same thing.
 
+use crate::REFRESH;
 use board_api::{Checks, Gate, NeedsYou, Pr, Rollout, SourceStatus};
+
+/// "Couldn't refresh from https://board.trulinc.com: no answer in time".
+pub fn couldnt_refresh(url: &str, problem: &str) -> String {
+    format!("Couldn't refresh from {url}: {problem}")
+}
+
+/// What shows before the first board: that it's loading, or, after a
+/// failed read, when the next is due.
+pub fn no_board(url: &str, failed: bool) -> String {
+    match failed {
+        true => format!("No board yet: the next read is due within {} s.", REFRESH.as_secs()),
+        false => format!("Loading from {url}…"),
+    }
+}
 
 /// `secs` as "12 s ago", "5 min ago" or "3 h ago".
 pub fn ago(secs: i64) -> String {

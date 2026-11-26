@@ -69,8 +69,8 @@ class ReadsTest {
         server.shutdown()
         val unreachable = read()
         assertTrue(unreachable.problem!!, unreachable.problem!!.startsWith("couldn't reach the board"))
-        compose.setContent { BoardScreen(unreachable, "https://board.example", {}, {}) }
-        compose.onNodeWithText("Couldn't refresh from https://board.example: ${unreachable.problem}").assertExists()
+        compose.setContent { BoardScreen(unreachable, {}, {}) }
+        compose.onNodeWithText("Couldn't refresh from ${server.url("/")}: ${unreachable.problem}").assertExists()
         compose.onNodeWithText("Build (0)").assertExists()
     }
 }
