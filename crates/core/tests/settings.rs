@@ -25,3 +25,11 @@ fn a_token_is_both_headers_or_none() {
     assert_eq!(headers, [("CF-Access-Client-Id", "id.access".into()), ("CF-Access-Client-Secret", "s3cret".into())]);
     assert_eq!(Settings { url: "u".into(), ..Default::default() }.headers().unwrap(), []);
 }
+
+// A settings value in a log or panic message mustn't carry the Access secret.
+#[test]
+fn debug_output_hides_the_secret() {
+    let shown = format!("{:?}", token());
+    assert!(!shown.contains("s3cret"), "{shown}");
+    assert!(shown.contains("id.access") && shown.contains("<redacted>"), "{shown}");
+}

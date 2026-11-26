@@ -1,0 +1,98 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-29",
+  "round": 1,
+  "result": "fail",
+  "recorded_at": "2026-11-26T22:08:48.814Z",
+  "inputs": {
+    "branch": "feat/tru-29-uniffi-apk",
+    "commit": "a3ab17c"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-29-uniffi-apk"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "35 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "4 test files changed with 9 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": false,
+      "detail": "1193 lines changed, counting 274 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at a3ab17c"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "commands:android",
+      "pass": true,
+      "detail": "cargo build -p board-ffi && ../gradlew test"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "3 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": ".github/workflows/ci.yaml",
+      "summary": "Without ANDROID_KEYSTORE_BASE64 the Sign step only warned and signed with a throwaway key on every event, so main could go green with an APK that can't update the owner's install",
+      "fix": "The step fails without the secret, except for dependabot[bot]; README updated"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": ".github/workflows/ci.yaml",
+      "summary": "The bindings check used git diff, which misses a new untracked generated file",
+      "fix": "Checks git status --porcelain -- android/core instead"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": ".sdlc/config.json",
+      "summary": "The whole file was re-indented, burying the real changes in formatting churn",
+      "fix": "Restored main's formatting and added only the new entries"
+    }
+  ],
+  "decision": "Stay in Build: fix and re-run",
+  "evidence": []
+}

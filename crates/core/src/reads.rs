@@ -42,13 +42,13 @@ impl Reads {
         self.started.is_some_and(|(n, t)| n > self.answered && now - t < GIVE_UP)
     }
 
-    /// Takes in read `n`'s answer, unless a later read has answered already,
-    /// so a slow answer can't replace a newer board.
-    pub fn finish(&mut self, n: u64, read: Result<Snapshot, String>) {
+    /// Takes in read `n`'s answer at `now`, unless a later read has answered
+    /// already, so a slow answer can't replace a newer board.
+    pub fn finish(&mut self, n: u64, read: Result<Snapshot, String>, now: Instant) {
         if n > self.answered {
             self.answered = n;
             match read {
-                Ok(s) => (self.snap, self.error, self.got) = (Some(s), None, Some(Instant::now())),
+                Ok(s) => (self.snap, self.error, self.got) = (Some(s), None, Some(now)),
                 Err(e) => self.error = Some(e),
             }
         }

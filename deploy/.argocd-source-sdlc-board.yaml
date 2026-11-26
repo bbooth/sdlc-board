@@ -4,5 +4,5 @@ helm:
     value: ghcr.io/bbooth/sdlc-board
     forcestring: true
   - name: image.tag
-    value: latest@sha256:71ef60371cf4ca7ce5507903c23cc5d1712899cc8c3cdb65f5718885947dbddb
+    value: latest@sha256:fceebb4e134970429e277aa762c721639d31100dfe979a8b975e801c32867965
     forcestring: true
