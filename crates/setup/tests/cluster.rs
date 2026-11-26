@@ -200,8 +200,21 @@ fn a_key_that_does_not_parse_touches_nothing() {
     let bad = KEY.replace("MII", "XXX");
     let r = run(&bad, "LINEAR_API_KEY\n", 0, SIGNED_IN);
     assert_ne!(r.code, 0, "{}", r.out);
-    assert!(r.calls.is_empty(), "kubectl ran: {:?}", r.calls);
+    // Only the read of the key names: no patch, no restart.
+    assert!(r.calls.iter().all(|(a, _)| a.contains(&"get".to_string())), "kubectl changed something: {:?}", r.calls);
     assert!(r.out.contains("GITHUB_APP_PRIVATE_KEY"), "{}", r.out);
+    for line in bad.lines().filter(|l| !l.starts_with("-----") && l.len() > 16) {
+        assert!(!r.out.contains(line), "the key is in the output:\n{}", r.out);
+    }
+}
+
+#[test]
+fn a_second_run_without_the_key_still_says_it_is_set_up() {
+    // The README has the owner delete the .pem after the first run.
+    let r = run("", "GITHUB_APP_ID\nGITHUB_APP_PRIVATE_KEY\nLINEAR_API_KEY\n", 0, SIGNED_IN);
+    assert_eq!(r.code, 0, "{}", r.out);
+    assert!(r.patches().is_empty() && r.restarts() == 0, "{:?}", r.calls);
+    assert!(r.out.contains("already set up"), "{}", r.out);
 }
 
 #[test]

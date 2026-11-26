@@ -82,8 +82,7 @@ impl Kubectl {
 /// checks it signed in as the App, then drops `GITHUB_TOKEN`. A failure after
 /// the Secret changed takes the App back out, so the board isn't left down.
 pub fn install_key(kube: &Kubectl, app_id: &str, pem: &str, out: &mut impl Write) -> anyhow::Result<()> {
-    // The server's own check, here before anything changes on the cluster.
-    Settings::from_values(Some(app_id), Some(pem))?;
+    // First, so a second run needs no key and still says what to do.
     let keys = kube.secret_keys().context("step: read the Secret's keys")?;
     if keys.iter().any(|k| k == "GITHUB_APP_ID") {
         writeln!(
@@ -94,6 +93,8 @@ pub fn install_key(kube: &Kubectl, app_id: &str, pem: &str, out: &mut impl Write
         )?;
         return Ok(());
     }
+    // The server's own check, before anything changes on the cluster.
+    Settings::from_values(Some(app_id), Some(pem))?;
     let patch = serde_json::json!({ "stringData": {
         "GITHUB_APP_ID": app_id.trim(),
         "GITHUB_APP_PRIVATE_KEY": format!("{}\n", pem.trim()),
