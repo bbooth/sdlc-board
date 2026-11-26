@@ -69,8 +69,9 @@
   at start. With the App set, `GITHUB_TOKEN` is ignored with a warning;
   without it, the token or tokenless reads work as before.
   `board_github_app_tokens_total{result}` counts the tokens got, and every
-  failure to get one, a failed installation lookup included. The chart
-  and the App's one-time setup come in TRU-19.
+  failure to get one, a failed installation lookup included. TRU-19:
+  the chart passes both settings from `sdlc-board-tokens` (optional), and
+  `argocd/README.md` step 4 is the App's one-time setup.
 
 ## Next
 
