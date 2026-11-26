@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-28",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-26T18:43:25.274Z",
+  "inputs": {
+    "branch": "feat/tru-28-shared-core",
+    "commit": "a87a444",
+    "verify_record": ".sdlc/records/TRU-28/verify-1.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-28/verify-1.json says pass at f72a226"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since f72a226"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at a87a444"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read a87a444"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security, operability, web"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "2 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "0 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "0 blocking findings refuted, 2 minor carried to the PR"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/core/src/settings.rs:6: Settings derives Debug (and Serialize) with client_secret as a plain String, so any later `{:?}` of Settings, a ReadError context, or a tracing field built from it (likely once the Android app from TRU-29 logs or persists its settings) writes the Cloudflare Access service-token secret in clear. Nothing in this diff prints it yet. A hand-written Debug that redacts client_secret would close this off.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/core/src/read.rs:79: every 3xx is read as Access asking for a login, whatever its Location says. Suppose BOARD_URL is set to http://board.trulinc.com and Cloudflare's HTTPS redirect answers 301 to https. The native app then reports 'Cloudflare Access or the board refused the service token' (or 'needs an Access service token' when no token is set), and the owner goes chasing the token when the real fix is the scheme. Checking that the Location points at the Access login (cloudflareaccess.com), or putting the Location in the error, would name the real cause.",
+      "status": "open",
+      "scope": "operability"
+    }
+  ],
+  "decision": "Open the PR and advance to PR review",
+  "evidence": []
+}
