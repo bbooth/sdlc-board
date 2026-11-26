@@ -1,0 +1,120 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-29",
+  "round": 3,
+  "result": "pass",
+  "recorded_at": "2026-11-26T22:33:49.232Z",
+  "inputs": {
+    "branch": "feat/tru-29-uniffi-apk",
+    "commit": "126a6b0"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-29-uniffi-apk"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "40 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "4 test files changed with 11 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "795 lines changed, counting 236 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 126a6b0"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "commands:android",
+      "pass": true,
+      "detail": "cargo build -p board-ffi && ../gradlew test"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "6 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": ".github/workflows/ci.yaml",
+      "summary": "Without ANDROID_KEYSTORE_BASE64 the Sign step only warned and signed with a throwaway key on every event, so main could go green with an APK that can't update the owner's install",
+      "fix": "The step fails without the secret, except for dependabot[bot]; README updated"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": ".github/workflows/ci.yaml",
+      "summary": "The bindings check used git diff, which misses a new untracked generated file",
+      "fix": "Checks git status --porcelain -- android/core instead"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": ".sdlc/config.json",
+      "summary": "The whole file was re-indented, burying the real changes in formatting churn",
+      "fix": "Restored main's formatting and added only the new entries"
+    },
+    {
+      "severity": "minor",
+      "summary": "android/core/src/main/kotlin/com/trulinc/board/core/board_ffi.kt:1790: the generated Kotlin `Settings` is a plain `data class`, so its `toString()` prints `clientSecret` in full. The KDoc above it, which comes from crates/ffi/src/lib.rs:16, says \"its Debug hides the secret\", but that is only true of the Rust Debug impl. Nothing in this diff logs a Settings yet. Once TRU-30 stores the Access token, any Kotlin `Log.d(\"$settings\")` or crash report that includes the object would leak the Access secret. Fix the comment so Kotlin callers aren't misled, or keep the secret out of the exported record's default string form.",
+      "status": "open",
+      "scope": "security",
+      "fix": "KDoc corrected (Rust's Debug hides the secret, Kotlin's toString doesn't); keeping Settings out of the app's logs is carried to TRU-30, which first stores and shows it"
+    },
+    {
+      "severity": "blocking",
+      "summary": "crates/ffi/src/lib.rs:60: Board.refresh and Board.view (line 72) time everything with std::time::Instant, which on Android is CLOCK_MONOTONIC. That clock stops while the phone is suspended. Sequence: a read succeeds at 09:00, the phone sleeps with its screen off until 17:00, then the app comes back. view() takes server_now as generated_at plus only the awake seconds since the read, so the board says 'Last refreshed: linear 5 s ago' and shows no stale lines for a board that is 8 hours old. refresh(false) also returns false, because REFRESH (30 s) is measured on the same clock. The same applies to a read that was in flight when the phone suspended: the GIVE_UP deadline, the 'no answer for N s' problem and waiting() all undercount. The board misstates its own freshness exactly when someone opens it. A clock that counts suspend is needed: CLOCK_BOOTTIME on Android, or a time the Kotlin side passes in from SystemClock.elapsedRealtime.",
+      "status": "fixed",
+      "scope": "operability",
+      "reason": "Confirmed with one correction. In rustc 1.97.0, std's Instant::now passes clock id 1 (CLOCK_MONOTONIC) to clock_gettime: I disassembled a test binary and found `mov $0x1,%edi` in std::time::Instant::now. rust-src isn't installed, but Android takes the same non-Apple unix path in std. The core's reads.rs:5 imports web_time::Instant, which on native targets is just std's Instant. reads.rs:51 stamps `got` with it, server_now at line 61 adds only the time since then, and start, waiting and problem (lines 32, 42, 67) measure REFRESH and GIVE_UP on the same clock. Nothing compensates for this. The Board API takes no time from Kotlin. MainActivity.kt only calls coreVersion(), and nothing in android/ uses onResume or elapsedRealtime. The correction: refresh(false) still returns true when no read has finished, because reads.rs:32 makes the first read due when `started` is none, so the 'returns false' part only holds after a first read. Board.refresh and Board.view are exported in this diff and tested from Kotlin (BoardTest.kt:55-91). This task's app doesn't call them yet, so a user first meets the bug in TRU-31, but that doesn't refute it.",
+      "judged": "confirmed",
+      "fix": "Board.refresh and view take the app's clock (now_ms, SystemClock.elapsedRealtime on Android, which counts sleep); Reads.finish takes the answer's time instead of reading Instant::now. BoardTest.aLongSleepMakesTheBoardOldAndDueAgain checks an 8 h gap shows as 8 h old and makes a read due."
+    },
+    {
+      "severity": "minor",
+      "summary": ".github/workflows/ci.yaml:9: the new workflow_dispatch trigger runs every job, not only android. A dispatch on main (to rebuild the APK, say) therefore passes the image job's `github.ref == 'refs/heads/main'` check at line 127 and pushes the sha tag, plus :latest when main is unchanged, again. If that rebuild's digest differs, Image Updater rolls the pod for no change, which the provenance:false comment says the job is built to avoid. Restricting image to push events, or android-only for workflow_dispatch, would remove the side effect. The README only documents dispatching on branches, where nothing is pushed.",
+      "status": "open",
+      "scope": "operability"
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
