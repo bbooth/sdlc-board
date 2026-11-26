@@ -3,7 +3,9 @@
 //! service token; in a browser, Access's login goes with the request.
 
 use board_api::Snapshot;
-use board_app::{Reads, GIVE_UP};
+#[cfg(target_arch = "wasm32")]
+use board_core::GIVE_UP;
+use board_core::{Reads, Settings};
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -11,14 +13,14 @@ use web_time::Instant;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
-    let url = std::env::var("BOARD_URL").unwrap_or_else(|_| "http://localhost:8080".into());
+    let settings = Settings::from_env();
     eframe::run_native(
         "SDLC board",
         eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default().with_inner_size([2000.0, 700.0]),
             ..Default::default()
         },
-        Box::new(move |_| Ok(Box::new(BoardApp { url, reads: Arc::default() }))),
+        Box::new(move |_| Ok(Box::new(BoardApp { settings, reads: Arc::default() }))),
     )
 }
 
@@ -35,7 +37,7 @@ fn main() {
         .expect("index.html has a canvas#board");
     wasm_bindgen_futures::spawn_local(async move {
         let app = Box::new(|_: &eframe::CreationContext<'_>| -> Result<Box<dyn eframe::App>, _> {
-            Ok(Box::new(BoardApp { url, reads: Arc::default() }))
+            Ok(Box::new(BoardApp { settings: Settings { url, ..Default::default() }, reads: Arc::default() }))
         });
         if let Err(e) = eframe::WebRunner::new().start(canvas, eframe::WebOptions::default(), app).await {
             web_sys::console::error_1(&e);
@@ -43,33 +45,20 @@ fn main() {
     });
 }
 
-/// Reads `url` natively, within [`GIVE_UP`], with the Access service token
-/// from `BOARD_ACCESS_CLIENT_ID` and `BOARD_ACCESS_CLIENT_SECRET` when set.
+/// Reads the board natively through `board_core`, on a thread of its own.
 #[cfg(not(target_arch = "wasm32"))]
-fn get(url: String, done: impl FnOnce(Result<Vec<u8>, String>) + Send + 'static) {
-    // The whole call has a deadline, so a server that never answers can't
-    // hold a thread and a socket open (ADR 0001).
-    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(GIVE_UP)).build().into();
-    let (id, secret) = (std::env::var("BOARD_ACCESS_CLIENT_ID").ok(), std::env::var("BOARD_ACCESS_CLIENT_SECRET").ok());
-    if id.is_some() != secret.is_some() {
-        return done(Err("set both BOARD_ACCESS_CLIENT_ID and BOARD_ACCESS_CLIENT_SECRET, or neither".into()));
-    }
-    let token = id.zip(secret);
-    std::thread::spawn(move || {
-        let mut req = agent.get(&url);
-        if let Some((id, secret)) = &token {
-            req = req.header("CF-Access-Client-Id", id).header("CF-Access-Client-Secret", secret);
-        }
-        done(req.call().and_then(|r| r.into_body().read_to_vec()).map_err(|e| e.to_string()));
-    });
+fn get(settings: &Settings, done: impl FnOnce(Result<Snapshot, String>) + Send + 'static) {
+    let settings = settings.clone();
+    std::thread::spawn(move || done(board_core::read(&settings, "native").map_err(|e| e.to_string())));
 }
 
-/// Reads `url` with the browser's fetch, aborted after [`GIVE_UP`].
+/// Reads the board with the browser's fetch, aborted after [`GIVE_UP`].
 #[cfg(target_arch = "wasm32")]
-fn get(url: String, done: impl FnOnce(Result<Vec<u8>, String>) + 'static) {
+fn get(settings: &Settings, done: impl FnOnce(Result<Snapshot, String>) + 'static) {
     use eframe::wasm_bindgen::{JsCast, JsValue};
     use wasm_bindgen_futures::JsFuture;
     let err = |e: JsValue| e.as_string().unwrap_or_else(|| format!("{e:?}"));
+    let url = format!("{}/v1/snapshot", settings.url.trim_end_matches('/'));
     wasm_bindgen_futures::spawn_local(async move {
         let read = async {
             let init = web_sys::RequestInit::new();
@@ -85,14 +74,15 @@ fn get(url: String, done: impl FnOnce(Result<Vec<u8>, String>) + 'static) {
                 return Err(format!("{} {}", resp.status(), resp.status_text()));
             }
             let text = JsFuture::from(resp.text().map_err(err)?).await.map_err(err)?;
-            text.as_string().map(String::into_bytes).ok_or_else(|| "an empty answer".to_string())
+            let text = text.as_string().ok_or_else(|| "an empty answer".to_string())?;
+            serde_json::from_str::<Snapshot>(&text).map_err(|e| format!("the answer wasn't a board: {e}"))
         };
         done(read.await);
     });
 }
 
 struct BoardApp {
-    url: String,
+    settings: Settings,
     reads: Arc<Mutex<Reads>>,
 }
 
@@ -103,9 +93,8 @@ impl BoardApp {
             return;
         };
         let (reads, ctx) = (self.reads.clone(), ctx.clone());
-        get(format!("{}/v1/snapshot", self.url.trim_end_matches('/')), move |body| {
-            let parsed = body.and_then(|b| serde_json::from_slice::<Snapshot>(&b).map_err(|e| e.to_string()));
-            reads.lock().unwrap_or_else(|e| e.into_inner()).finish(n, parsed);
+        get(&self.settings, move |read| {
+            reads.lock().unwrap_or_else(|e| e.into_inner()).finish(n, read);
             ctx.request_repaint();
         });
     }
@@ -130,7 +119,7 @@ impl eframe::App for BoardApp {
                     self.fetch(&ctx, true);
                 }
                 if let Some(e) = &problem {
-                    let msg = format!("Couldn't refresh from {}: {e}", self.url);
+                    let msg = format!("Couldn't refresh from {}: {e}", self.settings.url);
                     ui.colored_label(ui.visuals().error_fg_color, msg);
                 }
             });
@@ -138,7 +127,7 @@ impl eframe::App for BoardApp {
         egui::CentralPanel::default().show(ui, |ui| match (&snap, &problem) {
             (Some(snap), _) => board_app::board(ui, snap, now),
             (None, Some(_)) => drop(ui.label("No board yet: the next read is due within 30 s.")),
-            (None, None) => drop(ui.label(format!("Loading from {}…", self.url))),
+            (None, None) => drop(ui.label(format!("Loading from {}…", self.settings.url))),
         });
     }
 }

@@ -1,0 +1,20 @@
+[package]
+name = "board-core"
+version = "0.1.0"
+edition.workspace = true
+
+# What every client of the board shares: when to read the snapshot, what to
+# keep between reads, the settings and how a card's lines are worded.
+[dependencies]
+board-api = { version = "0.1.0", path = "../api" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+# std's Instant natively, the browser's clock on wasm, where std's panics.
+web-time = "1.1.0"
+
+# The native read (ADR 0001); the web build fetches in the browser.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ureq = "3.5.2"
+
+[dev-dependencies]
+tempfile = "3.27.0"

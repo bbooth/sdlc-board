@@ -602,12 +602,24 @@ name = "board-app"
 version = "0.1.0"
 dependencies = [
  "board-api",
+ "board-core",
  "eframe",
  "egui_kittest",
  "serde_json",
- "ureq",
  "wasm-bindgen-futures",
  "web-sys",
+ "web-time",
+]
+
+[[package]]
+name = "board-core"
+version = "0.1.0"
+dependencies = [
+ "board-api",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "ureq",
  "web-time",
 ]
 

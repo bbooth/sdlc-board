@@ -60,10 +60,12 @@ async fn require_access(S(access): S<Arc<Access>>, req: Request, next: Next) -> 
 /// Logs and counts every request by its route, not its raw path.
 async fn observe(S(state): S<Arc<State>>, req: Request, next: Next) -> impl IntoResponse {
     let route = req.extensions().get::<MatchedPath>().map_or("unmatched", |m| m.as_str()).to_owned();
+    let ua = req.headers().get(header::USER_AGENT).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let client = crate::metrics::client(ua);
     let started = Instant::now();
     let resp = next.run(req).await;
     let (status, secs) = (resp.status().as_u16(), started.elapsed().as_secs_f64());
-    state.metrics.request(&route, status, secs);
-    tracing::info!(route, status, duration_s = secs, "request");
+    state.metrics.request(&route, status, client, secs);
+    tracing::info!(route, status, client, duration_s = secs, "request");
     resp
 }

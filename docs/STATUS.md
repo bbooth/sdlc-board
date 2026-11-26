@@ -73,6 +73,15 @@
   the chart passes both settings from `sdlc-board-tokens` (optional), and
   `argocd/README.md` step 4 is the App's one-time setup.
 
+- TRU-28 (TRU-13's first task): the board's logic is one crate,
+  `crates/core` (`board-core`): when to read (`Reads`), the settings and
+  their Access headers, the native read with a User-Agent naming the
+  client and an error naming why a read failed, and how every line on a
+  card is worded (`words`). The egui app only draws. The server counts
+  requests by `client` (`android`, `native`, `web` or `other`, from the
+  User-Agent) in `board_http_requests_total`.
+
 ## Next
 
-- TRU-13 (Android).
+- TRU-13 (Android): TRU-29 (UniFFI and a signed APK), TRU-30 (settings
+  and reads), TRU-31 (the board screen).

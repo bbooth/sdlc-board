@@ -27,7 +27,8 @@ impl Default for Metrics {
                 .unwrap(),
             duration: histogram!("board_source_read_duration_seconds", "Read time, retry included.", s, b, r).unwrap(),
             age: gauge!("board_source_age_seconds", "Seconds since the source's last good read.", s, r).unwrap(),
-            requests: counter!("board_http_requests_total", "HTTP requests.", &["route", "status"], r).unwrap(),
+            requests: counter!("board_http_requests_total", "HTTP requests.", &["route", "status", "client"], r)
+                .unwrap(),
             request_duration: histogram!("board_http_request_duration_seconds", "HTTP time.", &["route"], r).unwrap(),
             app_tokens: counter!(
                 "board_github_app_tokens_total",
@@ -60,8 +61,8 @@ impl Metrics {
         }
     }
 
-    pub fn request(&self, route: &str, status: u16, secs: f64) {
-        self.requests.with_label_values(&[route, &status.to_string()]).inc();
+    pub fn request(&self, route: &str, status: u16, client: &str, secs: f64) {
+        self.requests.with_label_values(&[route, &status.to_string(), client]).inc();
         self.request_duration.with_label_values(&[route]).observe(secs);
     }
 
@@ -72,5 +73,16 @@ impl Metrics {
         let mut buf = Vec::new();
         TextEncoder::new().encode(&self.registry.gather(), &mut buf).unwrap_or_default();
         String::from_utf8(buf).unwrap_or_default()
+    }
+}
+
+/// Which build sent a request, from its User-Agent: the native and Android
+/// apps name themselves (`board_core::user_agent`); any browser is the web build.
+pub fn client(user_agent: &str) -> &'static str {
+    match user_agent {
+        ua if ua.starts_with("sdlc-board-android/") => "android",
+        ua if ua.starts_with("sdlc-board-native/") => "native",
+        ua if ua.starts_with("Mozilla/") => "web",
+        _ => "other",
     }
 }
