@@ -1,143 +1,29 @@
 {
   "$comment": "What the pipeline's gates know about this repo. Patterns are regular expressions matched against repo-relative paths. Written at onboarding, before any code: the crate paths are the planned layout, not findings. Since TRU-12 the app also has a web build, so its changes need browser evidence as well as e2e evidence.",
-  "tracker": {
-    "kind": "linear",
-    "team": "TruLinc",
-    "key": "TRU",
-    "project": "SDLC board"
-  },
-  "branchPrefixes": [
-    "feat/",
-    "fix/",
-    "docs/",
-    "infra/",
-    "ci/"
-  ],
+  "tracker": { "kind": "linear", "team": "TruLinc", "key": "TRU", "project": "SDLC board" },
+  "branchPrefixes": ["feat/", "fix/", "docs/", "infra/", "ci/"],
   "statusFile": "docs/STATUS.md",
-  "generated": {
-    "paths": [
-      "^android/core/src/main/kotlin/com/trulinc/board/core/board_ffi\\.kt$"
-    ],
-    "regenerate": "cargo build -p board-ffi && cargo run -p board-ffi --features bindgen --bin uniffi-bindgen -- generate target/debug/libboard_ffi.so --language kotlin --out-dir android/core/src/main/kotlin --no-format"
-  },
-  "unreviewed": [
-    "Cargo\\.lock$",
-    "^\\.sdlc/records/"
-  ],
-  "ships": [
-    "^crates/",
-    "^Cargo\\.toml$",
-    "^Cargo\\.lock$",
-    "^deploy/",
-    "^argocd/",
-    "Dockerfile",
-    "^android/"
-  ],
-  "code": [
-    "\\.rs$",
-    "\\.kts?$"
-  ],
-  "tests": [
-    "^crates/[^/]+/tests/",
-    "/tests?\\.rs$",
-    "_tests?\\.rs$",
-    "^android/[^/]+/src/test/"
-  ],
+  "generated": { "paths": ["^android/core/src/main/kotlin/com/trulinc/board/core/board_ffi\\.kt$"], "regenerate": "cargo build -p board-ffi && cargo run -p board-ffi --features bindgen --bin uniffi-bindgen -- generate target/debug/libboard_ffi.so --language kotlin --out-dir android/core/src/main/kotlin --no-format" },
+  "unreviewed": ["Cargo\\.lock$", "^\\.sdlc/records/"],
+  "ships": ["^crates/", "^Cargo\\.toml$", "^Cargo\\.lock$", "^deploy/", "^argocd/", "Dockerfile", "^android/"],
+  "code": ["\\.rs$", "\\.kts?$"],
+  "tests": ["^crates/[^/]+/tests/", "/tests?\\.rs$", "_tests?\\.rs$", "^android/[^/]+/src/test/"],
   "areas": [
-    {
-      "name": "cargo",
-      "cwd": ".",
-      "when": [
-        "^crates/",
-        "^Cargo\\.(toml|lock)$"
-      ],
-      "tool": "cargo",
-      "commands": [
-        "cargo fmt --all --check",
-        "cargo clippy --workspace --all-targets -- -D warnings",
-        "cargo test --workspace"
-      ]
-    },
-    {
-      "name": "android",
-      "cwd": "android/core",
-      "when": [
-        "^android/",
-        "^crates/(ffi|core|api)/"
-      ],
-      "tool": "gradle",
-      "commands": [
-        "cargo build -p board-ffi",
-        "../gradlew test"
-      ]
-    }
+    { "name": "cargo", "cwd": ".", "when": ["^crates/", "^Cargo\\.(toml|lock)$"], "tool": "cargo", "commands": ["cargo fmt --all --check", "cargo clippy --workspace --all-targets -- -D warnings", "cargo test --workspace"] },
+    { "name": "android", "cwd": "android/core", "when": ["^android/", "^crates/(ffi|core|api)/"], "tool": "gradle", "commands": ["cargo build -p board-ffi", "../gradlew test"] }
   ],
   "onEdit": [
-    {
-      "name": "rustfmt",
-      "when": "\\.rs$",
-      "cmd": "rustfmt",
-      "args": [
-        "--check",
-        "--edition",
-        "2021",
-        "{file}"
-      ],
-      "cwd": "."
-    }
+    { "name": "rustfmt", "when": "\\.rs$", "cmd": "rustfmt", "args": ["--check", "--edition", "2021", "{file}"], "cwd": "." }
   ],
   "evidence": {
-    "e2e": [
-      "^crates/server/src/",
-      "^crates/api/src/",
-      "^crates/app/src/"
-    ],
-    "browser": [
-      "^crates/app/src/",
-      "^crates/app/web/"
-    ]
+    "e2e": ["^crates/server/src/", "^crates/api/src/", "^crates/app/src/"],
+    "browser": ["^crates/app/src/", "^crates/app/web/"]
   },
   "reviewScopes": [
-    {
-      "name": "security",
-      "agent": "review-security",
-      "paths": [
-        "."
-      ]
-    },
-    {
-      "name": "api",
-      "agent": "review-api",
-      "paths": [
-        "^crates/api/",
-        "^crates/server/src/(routes|api)/"
-      ]
-    },
-    {
-      "name": "operability",
-      "agent": "review-operability",
-      "paths": [
-        "^crates/server/",
-        "^deploy/",
-        "^argocd/",
-        "^\\.github/",
-        "Dockerfile"
-      ]
-    },
-    {
-      "name": "web",
-      "agent": "review-web",
-      "paths": [
-        "^crates/app/"
-      ]
-    },
-    {
-      "name": "android",
-      "agent": "review-operability",
-      "paths": [
-        "^android/",
-        "^crates/ffi/"
-      ]
-    }
+    { "name": "security", "agent": "review-security", "paths": ["."] },
+    { "name": "api", "agent": "review-api", "paths": ["^crates/api/", "^crates/server/src/(routes|api)/"] },
+    { "name": "operability", "agent": "review-operability", "paths": ["^crates/server/", "^deploy/", "^argocd/", "^\\.github/", "Dockerfile"] },
+    { "name": "android", "agent": "review-operability", "paths": ["^android/", "^crates/ffi/"] },
+    { "name": "web", "agent": "review-web", "paths": ["^crates/app/"] }
   ]
 }

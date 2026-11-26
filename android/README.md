@@ -47,9 +47,9 @@ Only arm64 phones are built for.
 CI's `android` job signs the APK with the keystore in the repo's
 `ANDROID_KEYSTORE_BASE64` secret and its password in
 `ANDROID_KEYSTORE_PASSWORD` (the key's password is the same), and
-attaches it to the run as `sdlc-board-apk`. Without the secrets, as on
-Dependabot PRs, a throwaway key signs it, and that APK can't update an
-install signed with the real key.
+attaches it to the run as `sdlc-board-apk`. Without the secrets the job
+fails, except on Dependabot's PRs (which get no secrets): a throwaway key
+signs those, and that APK can't update an install signed with the real key.
 
 To build an APK from a branch before its PR, run the CI workflow on that
 branch (Actions, CI, Run workflow).
