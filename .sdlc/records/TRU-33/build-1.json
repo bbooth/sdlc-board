@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-33",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-26T20:21:30.031Z",
+  "inputs": {
+    "branch": "feat/tru-33-board-setup",
+    "commit": "ef71431"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-33-board-setup"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "8 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "1 test files changed with 2 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "356 lines changed, counting 242 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at ef71431"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "2 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "summary": "crates/setup/src/lib.rs:84: install_key checks the PEM with Settings::from_values before it reads the Secret's keys, so the AC-6 'already set up' path is only reached when a valid key is piped in again; a rerun with no .pem exits 1 without saying the App is set up. Fixed: the keys are read first; test a_second_run_without_the_key_still_says_it_is_set_up."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/setup/tests/cluster.rs:199: a_key_that_does_not_parse_touches_nothing doesn't check the key stays out of the output on the rejected-key path. Fixed: it now checks no line of the bad key is in the output."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
