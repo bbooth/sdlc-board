@@ -54,7 +54,31 @@ async fn reads_errors_duration_and_age_are_exported_per_source() {
     let gh = snap.sources.iter().find(|s| s.name == "github").unwrap();
     assert!(gh.last_good.is_none() && gh.last_error.as_deref().unwrap().contains("unreachable"));
 
-    // Requests are counted by route.
+    // Requests are counted by route, and by the client that sent them.
     let text = get(state, "/metrics").await;
-    assert!(text.contains(r#"board_http_requests_total{route="/v1/snapshot",status="200"} 1"#), "{text}");
+    let line = r#"board_http_requests_total{client="other",route="/v1/snapshot",status="200"} 1"#;
+    assert!(text.contains(line), "{text}");
+}
+
+// AC-6 of TRU-13: snapshot reads are counted by the client named in the User-Agent.
+#[tokio::test]
+async fn snapshot_reads_are_counted_by_client() {
+    let state = sources::State::new();
+    let agents = [
+        "sdlc-board-android/0.1.0",
+        "sdlc-board-native/0.1.0",
+        "sdlc-board-native/0.2.0",
+        "Mozilla/5.0 (X11; Linux x86_64) Chrome/140.0",
+        "curl/8.5.0",
+    ];
+    for ua in agents {
+        let req = Request::get("/v1/snapshot").header("user-agent", ua).body(Body::empty()).unwrap();
+        let resp = routes::router(state.clone(), None, None).oneshot(req).await.unwrap();
+        assert!(resp.status().is_success());
+    }
+    let text = get(state, "/metrics").await;
+    for (client, n) in [("android", 1), ("native", 2), ("web", 1), ("other", 1)] {
+        let line = format!(r#"board_http_requests_total{{client="{client}",route="/v1/snapshot",status="200"}} {n}"#);
+        assert!(text.contains(&line), "no {line} in\n{text}");
+    }
 }

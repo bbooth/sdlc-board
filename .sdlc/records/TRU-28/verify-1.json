@@ -1,0 +1,167 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-28",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-26T18:41:45.552Z",
+  "inputs": {
+    "branch": "feat/tru-28-shared-core",
+    "commit": "f72a226",
+    "build_record": ".sdlc/records/TRU-28/build-1.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-28/build-1.json says pass at 69fa019"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 69fa019"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at f72a226"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged f72a226"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-6, AC-8"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "18 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Has e2e and browser evidence, which this diff needs"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "12 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/server/tests/metrics.rs:snapshot_reads_are_counted_by_client passed: cargo test -p board-server --test metrics snapshot_reads_are_counted_by_client -- --exact"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/core/tests/read.rs:a_read_sends_the_access_headers_and_names_its_client passed: cargo test -p board-core --test read a_read_sends_the_access_headers_and_names_its_client -- --exact"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/core/tests/reads.rs:the_board_refreshes_itself_every_30_seconds passed: cargo test -p board-core --test reads the_board_refreshes_itself_every_30_seconds -- --exact"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/core/tests/reads.rs:a_failed_read_keeps_the_board_it_had passed: cargo test -p board-core --test reads a_failed_read_keeps_the_board_it_had -- --exact"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/core/tests/reads.rs:ages_go_by_the_servers_clock passed: cargo test -p board-core --test reads ages_go_by_the_servers_clock -- --exact"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/core/tests/read.rs:a_refused_token_says_access_refused_it passed: cargo test -p board-core --test read a_refused_token_says_access_refused_it -- --exact"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/core/tests/read.rs:a_server_that_isnt_there_is_unreachable passed: cargo test -p board-core --test read a_server_that_isnt_there_is_unreachable -- --exact"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/core/tests/read.rs:a_server_that_never_answers_times_out passed: cargo test -p board-core --test read a_server_that_never_answers_times_out -- --exact"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/core/tests/read.rs:a_redirect_to_the_login_page_is_a_refusal passed: cargo test -p board-core --test read a_redirect_to_the_login_page_is_a_refusal -- --exact"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/core/tests/read.rs:settings_that_cant_read_are_refused_before_sending passed: cargo test -p board-core --test read settings_that_cant_read_are_refused_before_sending -- --exact"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr passed: cargo test -p board-app --test board needs_you_is_listed_first_and_cards_show_their_gate_and_pr -- --exact"
+    },
+    {
+      "name": "rerun:AC-8",
+      "pass": true,
+      "detail": "crates/app/tests/board.rs:a_card_shows_its_rollouts_step_weight_and_analysis passed: cargo test -p board-app --test board a_card_shows_its_rollouts_step_weight_and_analysis -- --exact"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "3 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/app/src/main.rs:55-81: the web build's fetch (status check, JSON parse, 'the answer wasn't a board' wording) is still in the app, not in board-core. So the web build doesn't name failure causes the way ReadError does: a 401/redirect from Access shows as a raw status or fetch error. The ticket scopes the shared read to native, so this isn't blocking. Worth noting for AC-8's 'reading through the shared crate': the web build shares Reads, Settings and words, but not the read itself."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/core/src/words.rs has no tests of its own. It is covered only through the app's render tests, and changing the 'checks unknown' wording passed all tests (an_unknown_check_state_reads_as_unknown checks deserialization, not the drawn text). Android (TRU-31) will use words without the egui render tests, so direct tests in crates/core/tests would keep the clients' wording pinned."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/server/src/metrics.rs:client: any User-Agent starting 'Mozilla/' counts as web, so browser-like bots or scripts land in web, not other. The label can't grow beyond four values (checked live), so this is about accuracy, not cardinality."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-6 test crates/server/tests/metrics.rs:snapshot_reads_are_counted_by_client: PASS; FAILS with metrics::client mapping android to other, with routes.rs passing a fixed \"other\" client, and with the Mozilla/ => web arm removed",
+    "AC-6 test crates/core/tests/read.rs:a_read_sends_the_access_headers_and_names_its_client: PASS; FAILS with .user_agent(...) removed and with the header loop removed",
+    "AC-6 e2e local board-server (BOARD_NO_ACCESS=1, real Linear) + native app under Xvfb + web build in Playwright Chromium, GET :9091/metrics: board_http_requests_total{client=\"native\",route=\"/v1/snapshot\",status=\"200\"} increments about every 30 s while the native app runs. board_http_requests_total{client=\"web\",route=\"/v1/snapshot\",status=\"200\"} 1 after Chromium loaded the page, whose request carried UA 'Mozilla/5.0 ... HeadlessChrome/158'. curl reads and origin/main's app count as client=\"other\".",
+    "AC-6 e2e curl -A <random|3000-byte|empty|non-UTF-8|'sdlc-board-native/../x'|'mozilla/5.0'> /v1/snapshot, then /metrics: all 200; client label values stayed within {android,native,web,other}; non-UTF-8 and empty UAs counted as other",
+    "AC-8 browser Playwright Chromium (swiftshader) at http://localhost:8080/ served by local board-server with the head wasm build: board drawn: Needs you (1) 'Approve the spec: TRU-32 ...', 11 stage columns, Ready for approval (1), Build (2) with TRU-17 and TRU-8 → TRU-13 → TRU-28/29/30/31 and their gate lines; same as the native window; screenshot web.png",
+    "AC-8 e2e native board-app (head) under Xvfb, env -i, BOARD_URL=http://localhost:8080: same board as the web build (native.png, native-clean-env.png); counted as client=native",
+    "AC-8 browser wasm rebuilt from a scratch worktree with crates/core/src/words.rs 'Last refreshed' changed to 'MUTANT refreshed': Chromium showed 'MUTANT refreshed: linear 15 s ago', so the web build draws through board_core::words",
+    "AC-8 test crates/core/tests/reads.rs:the_board_refreshes_itself_every_30_seconds: PASS; FAILS with REFRESH at 31 s and with finish() ignoring the stale-answer check",
+    "AC-8 test crates/core/tests/reads.rs:a_failed_read_keeps_the_board_it_had: PASS; FAILS when an error clears snap",
+    "AC-8 test crates/core/tests/reads.rs:ages_go_by_the_servers_clock: PASS; FAILS with generated_at dropped from server_now",
+    "AC-8 test crates/core/tests/read.rs:a_refused_token_says_access_refused_it: PASS; FAILS when a 401 with a token is reported as NeedsToken, and when the 401|403 wording arm is changed",
+    "AC-8 test crates/core/tests/read.rs:a_server_that_isnt_there_is_unreachable: PASS; FAILS when transport errors map to TimedOut",
+    "AC-8 test crates/core/tests/read.rs:a_server_that_never_answers_times_out: PASS; FAILS with the Timeout => TimedOut arm removed",
+    "AC-8 test crates/core/tests/read.rs:a_redirect_to_the_login_page_is_a_refusal: PASS; FAILS with max_redirects(0) removed",
+    "AC-8 test crates/core/tests/read.rs:settings_that_cant_read_are_refused_before_sending: PASS; FAILS with the settings check removed",
+    "AC-8 test crates/app/tests/board.rs:needs_you_is_listed_first_and_cards_show_their_gate_and_pr: PASS, unchanged from origin/main; FAILS with words::needs_you's 'Approve the spec' changed",
+    "AC-8 test crates/app/tests/board.rs:a_card_shows_its_rollouts_step_weight_and_analysis: PASS, unchanged from origin/main; FAILS with words::rollout's 'step {} of {}' changed",
+    "AC-8 inspection git diff origin/main...HEAD -- crates/app/tests/board.rs: 0 additions, 66 deletions (the three Reads tests, secs() and the std::time import); the four render tests are identical to base"
+  ]
+}

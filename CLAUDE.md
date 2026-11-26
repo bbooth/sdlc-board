@@ -16,7 +16,10 @@ A Cargo workspace, not built yet:
 - `crates/api/`: the snapshot types the server and the app share.
 - `crates/server/`: the axum server that reads the sources and serves the
   snapshot and the web build.
-- `crates/app/`: the egui (eframe) app, for native Linux, wasm and Android.
+- `crates/core/`: the board's logic every client shares: reads, settings,
+  the native read and the wording.
+- `crates/app/`: the egui (eframe) app, for native Linux and wasm; it only
+  draws.
 - `deploy/`, `argocd/`: the chart and Application, once it deploys.
 
 ## Pipeline

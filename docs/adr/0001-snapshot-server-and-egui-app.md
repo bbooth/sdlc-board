@@ -32,3 +32,6 @@ web, to one person, and no client may hold a Linear or GitHub token.
   one GET per namespace, rather than the `kube` crate the plan named
   (amended by TRU-14): one list call didn't need a Kubernetes client and
   its dependencies.
+- What isn't drawing lives in `crates/core` (amended by TRU-28): the reads,
+  the settings, the native read and the wording, so every client, the
+  Android app included (TRU-13), shares one copy.

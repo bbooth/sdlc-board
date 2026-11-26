@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-28",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-26T18:22:45.972Z",
+  "inputs": {
+    "branch": "feat/tru-28-shared-core",
+    "commit": "69fa019"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-28-shared-core"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "21 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "5 test files changed with 9 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "703 lines changed, counting 294 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 69fa019"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "5 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": "crates/core/src/settings.rs",
+      "summary": "Settings load/save is TRU-30's scope (noBackupFilesDir); removed from TRU-28",
+      "fix": "Removed load/save and the tempfile dev-dependency; TRU-30 adds them"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": "crates/core/src/settings.rs",
+      "summary": "Saved settings file holding the secret wasn't written with owner-only permissions",
+      "fix": "Gone with save; TRU-30 will write it under noBackupFilesDir"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": "crates/core/src/read.rs",
+      "summary": "With no token set, an Access login reads as 'refused the service token'",
+      "fix": "New ReadError::NeedsToken says the board needs a service token; tested"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": "crates/core/src/lib.rs",
+      "summary": "Crate doc and CLAUDE.md layout didn't describe crates/core",
+      "fix": "Updated the crate doc and CLAUDE.md's planned layout"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": "crates/core/tests/read.rs",
+      "summary": "Timeout test waited the full 20 s deadline",
+      "fix": "read_within takes the deadline; the test uses 1 s"
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
