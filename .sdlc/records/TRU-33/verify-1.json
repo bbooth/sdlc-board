@@ -1,0 +1,144 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-33",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-26T20:29:37.195Z",
+  "inputs": {
+    "branch": "feat/tru-33-board-setup",
+    "commit": "c32b3d5",
+    "build_record": ".sdlc/records/TRU-33/build-1.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-33/build-1.json says pass at ef71431"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since ef71431"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at c32b3d5"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged c32b3d5"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-3, AC-4, AC-5, AC-6"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "10 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Nothing here needs more than tests"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "9 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:adds_both_keys_restarts_and_drops_the_old_token_after_sign_in passed: cargo test -p board-setup --test cluster adds_both_keys_restarts_and_drops_the_old_token_after_sign_in -- --exact"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:leaves_the_secret_without_a_token_alone_after_sign_in passed: cargo test -p board-setup --test cluster leaves_the_secret_without_a_token_alone_after_sign_in -- --exact"
+    },
+    {
+      "name": "rerun:AC-4",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:backs_out_when_the_pod_does_not_come_up passed: cargo test -p board-setup --test cluster backs_out_when_the_pod_does_not_come_up -- --exact"
+    },
+    {
+      "name": "rerun:AC-4",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:backs_out_when_the_pod_does_not_sign_in_as_the_app passed: cargo test -p board-setup --test cluster backs_out_when_the_pod_does_not_sign_in_as_the_app -- --exact"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:a_failed_patch_that_quotes_the_key_shows_it_redacted passed: cargo test -p board-setup --test cluster a_failed_patch_that_quotes_the_key_shows_it_redacted -- --exact"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:adds_both_keys_restarts_and_drops_the_old_token_after_sign_in passed: cargo test -p board-setup --test cluster adds_both_keys_restarts_and_drops_the_old_token_after_sign_in -- --exact"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:a_key_that_does_not_parse_touches_nothing passed: cargo test -p board-setup --test cluster a_key_that_does_not_parse_touches_nothing -- --exact"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:a_second_run_changes_nothing passed: cargo test -p board-setup --test cluster a_second_run_changes_nothing -- --exact"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:a_second_run_without_the_key_still_says_it_is_set_up passed: cargo test -p board-setup --test cluster a_second_run_without_the_key_still_says_it_is_set_up -- --exact"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "3 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/setup/src/lib.rs: the kubectl argument forms are checked only against the fake kubectl and still need a real-kubectl/cluster check (Outcome). These are `--request-timeout=30s -n sdlc-board patch secret ... --type merge --patch-file /dev/stdin`, the API server turning a merge-patched stringData into data with real newlines, `rollout status deployment/sdlc-board --timeout=2m`, `logs deployment/sdlc-board`, and the json-remove patches. No kubectl or cluster exists in this container."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": ".gitignore (only /target): argocd/README.md step 4 runs `cargo run -p board-setup ... < <downloaded>.pem` from a checkout, and nothing stops a .pem saved into the checkout from being committed before the `rm`. A `*.pem` rule, with exceptions for the test fixtures, would back up AC-5's 'not committed'."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/setup/src/lib.rs scrub(): redacts only key lines longer than 16 characters. A PEM whose last body line is 16 characters or shorter would leave that fragment unredacted if kubectl's stderr ever quoted the patch. This is harmless for the 64-character lines of real keys, and the fixture's last line is 29 characters."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-3 test crates/setup/tests/cluster.rs:adds_both_keys_restarts_and_drops_the_old_token_after_sign_in: PASS. FAILS with the token removed before check_sign_in, and with the key's newlines escaped or stripped",
+    "AC-3 test crates/setup/tests/cluster.rs:leaves_the_secret_without_a_token_alone_after_sign_in: PASS: one patch only",
+    "AC-3 inspection deploy/templates/board.yaml:31-32, crates/server/src/main.rs:42: Recreate with 1 replica, and the sign-in line is logged before bind/readiness, so `logs deployment/sdlc-board` after rollout status reads the new pod",
+    "AC-4 test crates/setup/tests/cluster.rs:backs_out_when_the_pod_does_not_come_up: PASS. FAILS with the rollout status error ignored, with no back-out, with no back-out restart, or with GITHUB_TOKEN added to the back-out",
+    "AC-4 test crates/setup/tests/cluster.rs:backs_out_when_the_pod_does_not_sign_in_as_the_app: PASS. FAILS with the logs check disabled",
+    "AC-5 test crates/setup/tests/cluster.rs:a_failed_patch_that_quotes_the_key_shows_it_redacted: PASS. FAILS with scrub() disabled",
+    "AC-5 test crates/setup/tests/cluster.rs:adds_both_keys_restarts_and_drops_the_old_token_after_sign_in: PASS. assert_no_leak FAILS with the key in argv, written to a temp file, or printed",
+    "AC-5 test crates/setup/tests/cluster.rs:a_key_that_does_not_parse_touches_nothing: PASS: only the get call, and the bad key isn't in the output. FAILS with the Settings::from_values check removed",
+    "AC-6 test crates/setup/tests/cluster.rs:a_second_run_changes_nothing: PASS. FAILS with the GITHUB_APP_ID check removed",
+    "AC-6 test crates/setup/tests/cluster.rs:a_second_run_without_the_key_still_says_it_is_set_up: PASS. FAILS with the GITHUB_APP_ID check removed"
+  ]
+}

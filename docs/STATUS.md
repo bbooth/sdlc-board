@@ -90,7 +90,18 @@
   `board-ffi` for arm64 phones, runs the tests and attaches a signed APK
   (`sdlc-board-apk`). `android/README.md` says how to build it.
 
+- TRU-33 (TRU-32's first task): `crates/setup` (`board-setup`, not in
+  the image) puts a GitHub App on the cluster:
+  `cargo run -p board-setup -- key --app-id ID < app.pem` checks the key,
+  patches `sdlc-board-tokens`, restarts the board, waits for it to sign in
+  as the App and then drops `GITHUB_TOKEN`; on a failure it takes the App
+  back out. The key travels on kubectl's stdin only. A Secret that already
+  has `GITHUB_APP_ID` is left alone. `KUBECTL` overrides the kubectl run.
+
 ## Next
 
 - TRU-13 (Android): TRU-30 (settings and reads), TRU-31 (the board
   screen).
+- TRU-32 (GitHub App setup): TRU-35 (create and install the App through
+  GitHub's manifest flow), TRU-34 (onboard-project adds new repos to the
+  App and `deploy/values.yaml`).

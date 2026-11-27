@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-33",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-26T20:30:58.083Z",
+  "inputs": {
+    "branch": "feat/tru-33-board-setup",
+    "commit": "6633d56",
+    "verify_record": ".sdlc/records/TRU-33/verify-1.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-33/verify-1.json says pass at c32b3d5"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since c32b3d5"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 6633d56"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read 6633d56"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "1 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "0 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "0 blocking findings refuted, 1 minor carried to the PR"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/setup/src/lib.rs:54: scrub() removes only the PEM's plain-text body lines. If kubectl or the API server ever quotes the Secret as it is stored (`data` holds the key base64-encoded), that encoding passes through unredacted into the error the script prints. Today's API errors for a Secret patch don't echo values, so this is a gap in the defence rather than a leak anyone can trigger. Redacting the base64 form of the PEM too would close it.",
+      "status": "open",
+      "scope": "security"
+    }
+  ],
+  "decision": "Open the PR and advance to PR review",
+  "evidence": []
+}

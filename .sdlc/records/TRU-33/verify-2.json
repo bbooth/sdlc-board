@@ -1,0 +1,144 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-33",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-26T23:44:29.253Z",
+  "inputs": {
+    "branch": "feat/tru-33-board-setup",
+    "commit": "824ff25",
+    "build_record": ".sdlc/records/TRU-33/build-2.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-33/build-2.json says pass at d5baf14"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since d5baf14"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 824ff25"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 824ff25"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-3, AC-4, AC-5, AC-6"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "10 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Nothing here needs more than tests"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "8 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:adds_both_keys_restarts_and_drops_the_old_token_after_sign_in passed: cargo test -p board-setup --test cluster adds_both_keys_restarts_and_drops_the_old_token_after_sign_in -- --exact"
+    },
+    {
+      "name": "rerun:AC-3",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:leaves_the_secret_without_a_token_alone_after_sign_in passed: cargo test -p board-setup --test cluster leaves_the_secret_without_a_token_alone_after_sign_in -- --exact"
+    },
+    {
+      "name": "rerun:AC-4",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:backs_out_when_the_pod_does_not_come_up passed: cargo test -p board-setup --test cluster backs_out_when_the_pod_does_not_come_up -- --exact"
+    },
+    {
+      "name": "rerun:AC-4",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:backs_out_when_the_pod_does_not_sign_in_as_the_app passed: cargo test -p board-setup --test cluster backs_out_when_the_pod_does_not_sign_in_as_the_app -- --exact"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:a_failed_patch_that_quotes_the_key_shows_it_redacted passed: cargo test -p board-setup --test cluster a_failed_patch_that_quotes_the_key_shows_it_redacted -- --exact"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:adds_both_keys_restarts_and_drops_the_old_token_after_sign_in passed: cargo test -p board-setup --test cluster adds_both_keys_restarts_and_drops_the_old_token_after_sign_in -- --exact"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:a_second_run_changes_nothing passed: cargo test -p board-setup --test cluster a_second_run_changes_nothing -- --exact"
+    },
+    {
+      "name": "rerun:AC-6",
+      "pass": true,
+      "detail": "crates/setup/tests/cluster.rs:a_second_run_without_the_key_still_says_it_is_set_up passed: cargo test -p board-setup --test cluster a_second_run_without_the_key_still_says_it_is_set_up -- --exact"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "4 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/setup/tests/cluster.rs:reads_the_secret_by_key_names_only checks only that `rollout status` has some --timeout, not that it is 2m. Changing --timeout=2m to --timeout=5m in crates/setup/src/lib.rs still passed every test, so AC-4's 2-minute limit is not pinned by a test."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/setup/src/lib.rs check_sign_in reads `kubectl logs deployment/sdlc-board`, which picks one pod. Right after a rollout on a real cluster it could pick the old pod while that pod is still terminating, giving a false back-out. This needs the live Outcome check."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "`board-setup key --app-id \"\"` with a valid key exits 1 with 'GITHUB_APP_PRIVATE_KEY is set but GITHUB_APP_ID isn't', which is the server's wording, not the CLI's. It changes nothing on the cluster, but the message is misleading for an empty --app-id."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "Workspace checks at 824ff25, run with CARGO_TARGET_DIR=/tmp/claude-0/verifier-r2-target exported in the shell. All pass: `cargo fmt --all --check`; `cargo build --workspace` (board-ffi from main included); `cargo clippy --workspace --all-targets -- -D warnings` (exit 0); `cargo test -p board-setup` (9/9). Recorded here because the schema has no other field for it; nothing to fix."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-3 test crates/setup/tests/cluster.rs:adds_both_keys_restarts_and_drops_the_old_token_after_sign_in: PASS. Fails under each of these mutations: no-drop-token, drop-token-first, key-oneline, no-merge",
+    "AC-3 test crates/setup/tests/cluster.rs:leaves_the_secret_without_a_token_alone_after_sign_in: PASS, with a single patch",
+    "AC-4 test crates/setup/tests/cluster.rs:backs_out_when_the_pod_does_not_come_up: PASS. Fails with the back-out key removal or the back-out restart taken out",
+    "AC-4 test crates/setup/tests/cluster.rs:backs_out_when_the_pod_does_not_sign_in_as_the_app: PASS. Fails when the logs check is skipped, or when back-out also removes GITHUB_TOKEN",
+    "AC-4 e2e the built board-setup binary against a scratch fake kubectl whose first rollout restart fails: exit 1, 'error: the App's keys were removed again and the board restarted: step: rollout restart: ... forbidden'. Calls: get, merge patch, restart (failed), JSON remove of both App keys, restart",
+    "AC-5 test crates/setup/tests/cluster.rs:a_failed_patch_that_quotes_the_key_shows_it_redacted: PASS. Fails with the scrub removed",
+    "AC-5 test crates/setup/tests/cluster.rs:adds_both_keys_restarts_and_drops_the_old_token_after_sign_in: PASS. Fails when the patch is sent as a `-p` argument instead of on stdin (assert_no_leak)",
+    "AC-5 inspection git diff origin/main...HEAD: no PEM block and no key file added",
+    "AC-6 test crates/setup/tests/cluster.rs:a_second_run_changes_nothing: PASS. Fails with the GITHUB_APP_ID check taken out",
+    "AC-6 test crates/setup/tests/cluster.rs:a_second_run_without_the_key_still_says_it_is_set_up: PASS"
+  ]
+}

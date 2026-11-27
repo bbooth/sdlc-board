@@ -34,28 +34,29 @@ are the native app's `BOARD_ACCESS_CLIENT_ID` and `BOARD_ACCESS_CLIENT_SECRET`.
    3. **Install App** on your account, choosing **Only select
       repositories** and every repo in `deploy/values.yaml`'s `repos`
       (add new ones here when you onboard them).
-   4. Add both to the existing Secret in one patch, keeping its other
-      keys, then restart the pod and check it came up. The key goes in as
-      the file's bytes: the server needs the PEM's real line breaks, and a
-      key pasted on one line with `\n` escapes fails at start. The patch
-      goes through a pipe, so the key is never on a command line or in a
-      file. Each command runs only if the one before worked, and
-      `openssl` checks the key first, because a pod given an ID without a
-      usable key exits at start, and with `Recreate` the board is down
-      until it's fixed:
+   4. From a checkout on a machine whose kubectl reaches the cluster
+      (`~/.kube/k3s-homelab.yaml` on Omarchy), hand the key to
+      `board-setup` on stdin, then delete the file:
 
       ```sh
-      openssl rsa -in <downloaded>.pem -check -noout \
-        && kubectl create secret generic app --dry-run=client \
-          --from-literal=GITHUB_APP_ID=<App ID> \
-          --from-file=GITHUB_APP_PRIVATE_KEY=<downloaded>.pem \
-          -o go-template='{"data":{"GITHUB_APP_ID":"{{.data.GITHUB_APP_ID}}","GITHUB_APP_PRIVATE_KEY":"{{.data.GITHUB_APP_PRIVATE_KEY}}"}}' \
-        | kubectl -n sdlc-board patch secret sdlc-board-tokens --type merge --patch-file /dev/stdin \
-        && kubectl -n sdlc-board rollout restart deployment sdlc-board \
-        && kubectl -n sdlc-board rollout status deployment sdlc-board --timeout=2m \
-        && kubectl -n sdlc-board logs deployment/sdlc-board | grep 'reading GitHub as the GitHub App' \
+      cargo run -p board-setup -- key --app-id <App ID> < <downloaded>.pem \
         && rm <downloaded>.pem
       ```
+
+      It checks the key parses and can sign, adds `GITHUB_APP_ID` and
+      `GITHUB_APP_PRIVATE_KEY` to `sdlc-board-tokens` in one merge patch
+      (keeping its other keys, and the PEM's line breaks), restarts the
+      board and waits up to 2 minutes for the new pod to log
+      `reading GitHub as the GitHub App`. Only then does it remove
+      `GITHUB_TOKEN`, if the Secret has one. The key goes to kubectl on
+      stdin only: never on a command line, into a file or the output.
+      Run again once the Secret has `GITHUB_APP_ID`, it changes nothing.
+
+      If the pod doesn't come up or doesn't sign in as the App, it
+      removes both App keys and restarts the board, which goes back to
+      `GITHUB_TOKEN` or tokenless reads (with `Recreate`, a pod that
+      can't start is the board down), and exits non-zero naming the
+      step that failed.
 
       To check the tokens, `kubectl -n sdlc-board port-forward
       deployment/sdlc-board 9091` and, in another terminal,
@@ -64,20 +65,11 @@ are the native app's `BOARD_ACCESS_CLIENT_ID` and `BOARD_ACCESS_CLIENT_SECRET`.
       repo the App isn't installed on shows on the board as "the GitHub App
       isn't installed on ..." among the failed sources.
 
-   5. **To back out**, if the pod doesn't come up or the App misbehaves,
-      remove both keys and restart; the board goes back to `GITHUB_TOKEN`
-      or tokenless reads:
+   5. **To back out** by hand, or to replace the App on purpose (then
+      run step 4 again), remove both keys and restart:
 
       ```sh
       kubectl -n sdlc-board patch secret sdlc-board-tokens --type json \
         -p '[{"op":"remove","path":"/data/GITHUB_APP_ID"},{"op":"remove","path":"/data/GITHUB_APP_PRIVATE_KEY"}]' \
         && kubectl -n sdlc-board rollout restart deployment sdlc-board
       ```
-
-   While the old `GITHUB_TOKEN` key is set too, it's ignored with a
-   warning. Once the App works, remove it:
-
-   ```sh
-   kubectl -n sdlc-board patch secret sdlc-board-tokens --type json \
-     -p '[{"op":"remove","path":"/data/GITHUB_TOKEN"}]'
-   ```
