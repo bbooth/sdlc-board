@@ -1,0 +1,170 @@
+{
+  "schema": 1,
+  "stage": "verify",
+  "ticket": "TRU-35",
+  "round": 2,
+  "result": "pass",
+  "recorded_at": "2026-11-27T20:03:15.556Z",
+  "inputs": {
+    "branch": "feat/tru-35-app-manifest",
+    "commit": "6199041",
+    "build_record": ".sdlc/records/TRU-35/build-2.json"
+  },
+  "agent": {
+    "name": "check-verify",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "build_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-35/build-2.json says pass at 94ce342"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 94ce342"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 6199041"
+    },
+    {
+      "name": "verified_commit",
+      "pass": true,
+      "detail": "The verifier judged 6199041"
+    },
+    {
+      "name": "criteria_covered",
+      "pass": true,
+      "detail": "A verdict for each of AC-1, AC-2, AC-5"
+    },
+    {
+      "name": "criteria_met",
+      "pass": true,
+      "detail": "Every criterion is met"
+    },
+    {
+      "name": "evidence",
+      "pass": true,
+      "detail": "16 pieces of evidence, each criterion observed running"
+    },
+    {
+      "name": "end_to_end",
+      "pass": true,
+      "detail": "Nothing here needs more than tests"
+    },
+    {
+      "name": "tests_exist",
+      "pass": true,
+      "detail": "14 named tests are in the repo"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:creates_a_read_only_private_app_and_hands_its_key_to_the_cluster passed: cargo test -p board-setup --test app creates_a_read_only_private_app_and_hands_its_key_to_the_cluster -- --exact"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:a_redirect_with_the_wrong_state_is_refused passed: cargo test -p board-setup --test app a_redirect_with_the_wrong_state_is_refused -- --exact"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:a_request_not_addressed_to_the_setup_gets_nothing passed: cargo test -p board-setup --test app a_request_not_addressed_to_the_setup_gets_nothing -- --exact"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:an_app_owned_by_someone_else_is_not_used passed: cargo test -p board-setup --test app an_app_owned_by_someone_else_is_not_used -- --exact"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:a_redirect_naming_another_apps_installation_does_not_end_the_wait passed: cargo test -p board-setup --test app a_redirect_naming_another_apps_installation_does_not_end_the_wait -- --exact"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:without_a_gh_sign_in_it_stops_before_making_an_app passed: cargo test -p board-setup --test app without_a_gh_sign_in_it_stops_before_making_an_app -- --exact"
+    },
+    {
+      "name": "rerun:AC-1",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:an_app_already_on_the_cluster_means_no_new_app passed: cargo test -p board-setup --test app an_app_already_on_the_cluster_means_no_new_app -- --exact"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:the_installation_ends_with_exactly_the_boards_repos passed: cargo test -p board-setup --test app the_installation_ends_with_exactly_the_boards_repos -- --exact"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:an_install_on_all_repositories_is_called_out passed: cargo test -p board-setup --test app an_install_on_all_repositories_is_called_out -- --exact"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:when_github_refuses_the_token_it_says_which_repos_to_choose_and_exits_non_zero passed: cargo test -p board-setup --test app when_github_refuses_the_token_it_says_which_repos_to_choose_and_exits_non_zero -- --exact"
+    },
+    {
+      "name": "rerun:AC-2",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:reads_the_boards_repos_from_the_charts_values passed: cargo test -p board-setup --test app reads_the_boards_repos_from_the_charts_values -- --exact"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:creates_a_read_only_private_app_and_hands_its_key_to_the_cluster passed: cargo test -p board-setup --test app creates_a_read_only_private_app_and_hands_its_key_to_the_cluster -- --exact"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:an_app_owned_by_someone_else_is_not_used passed: cargo test -p board-setup --test app an_app_owned_by_someone_else_is_not_used -- --exact"
+    },
+    {
+      "name": "rerun:AC-5",
+      "pass": true,
+      "detail": "crates/setup/tests/app.rs:when_github_refuses_the_token_it_says_which_repos_to_choose_and_exits_non_zero passed: cargo test -p board-setup --test app when_github_refuses_the_token_it_says_which_repos_to_choose_and_exits_non_zero -- --exact"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "2 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/setup/tests/app.rs:an_app_owned_by_someone_else_is_not_used: with the owner check removed, this test only fails after the full 15-minute BROWSER_WAIT, not quickly. The test never posts a manifest, so the stub's /apps/{slug}/installations/new handler panics at app.rs:81 (manifest is None) and the setup waits until it times out. The test does fail without the fix, but a regression would show up as a 15-minute hang."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/setup/src/app.rs:/created arm: a request with the right state and Host but no code ends the whole run (`param(..., \"code\").context(...)?`) instead of answering 400 and waiting, as the other bad requests do. Only a holder of the state can send it, so the risk is low."
+    }
+  ],
+  "decision": "Advance to Adversarial review",
+  "evidence": [
+    "AC-1 test crates/setup/tests/app.rs:creates_a_read_only_private_app_and_hands_its_key_to_the_cluster: PASS. The manifest has public false, an inactive hook, no events and exactly checks/contents/metadata/pull_requests read. The patch on kubectl stdin holds GITHUB_APP_ID 4242 and the stub's key.",
+    "AC-1 test crates/setup/tests/app.rs:a_redirect_with_the_wrong_state_is_refused: PASS. A wrong state gets 400 and no conversion; the real flow then converts once.",
+    "AC-1 test crates/setup/tests/app.rs:a_request_not_addressed_to_the_setup_gets_nothing: PASS. A request with Host evil.example gets 403. With the Host check removed the test fails (200 != 403).",
+    "AC-1 test crates/setup/tests/app.rs:an_app_owned_by_someone_else_is_not_used: PASS. The run exits non-zero with 'belongs to \"mallory\"' and no kubectl patch. With the owner check removed (wait shortened to 8s) it fails: the run ends without that message.",
+    "AC-1 test crates/setup/tests/app.rs:a_redirect_naming_another_apps_installation_does_not_end_the_wait: PASS. A redirect naming installation 5 gets 400 and the run keeps waiting; the real redirect finishes it. With own_installation skipped the test fails.",
+    "AC-1 test crates/setup/tests/app.rs:without_a_gh_sign_in_it_stops_before_making_an_app: PASS. The run exits non-zero naming 'gh auth login', with no browser opened and no manifest posted. With gh moved after App creation it fails.",
+    "AC-1 test crates/setup/tests/app.rs:an_app_already_on_the_cluster_means_no_new_app: PASS. The run says 'already set up' and never opens the browser. With the is_set_up check removed it fails.",
+    "AC-1 e2e Scratch test (not kept) running the board-setup binary against the stub: raw TCP requests with no Host and with Host localhost:<port>, /created carrying the real state but Host evil.example:<port>, a replay of /created once the App exists, /installed with installation_id=x and with none: No Host gets 403. localhost gets 403 with no state in the body. The evil Host with the real state gets 403 and no conversion. The replayed /created gets 404 and there is still one conversion. Both bad /installed requests get 400 and the wait continues. The run then finishes with exit 0, and the key and token appear in no output, argument or work file.",
+    "AC-2 test crates/setup/tests/app.rs:the_installation_ends_with_exactly_the_boards_repos: PASS. The changes are exactly [PUT 2, DELETE 9] and the installation ends with bbooth/booking and bbooth/sdlc-board. No call used the wrong auth.",
+    "AC-2 test crates/setup/tests/app.rs:an_install_on_all_repositories_is_called_out: PASS. The run exits non-zero with 'installed on all repositories' and changes nothing.",
+    "AC-2 test crates/setup/tests/app.rs:when_github_refuses_the_token_it_says_which_repos_to_choose_and_exits_non_zero: PASS. On a 403 for the repo changes the run says 'not finished', names /settings/installations/77 and the repos, and still completes the cluster step.",
+    "AC-2 test crates/setup/tests/app.rs:reads_the_boards_repos_from_the_charts_values: PASS. The real deploy/values.yaml gives [bbooth/booking, bbooth/sdlc-board].",
+    "AC-5 test crates/setup/tests/app.rs:creates_a_read_only_private_app_and_hands_its_key_to_the_cluster: PASS, including assert_no_leak.",
+    "AC-5 test crates/setup/tests/app.rs:an_app_owned_by_someone_else_is_not_used: PASS. The failing run leaks neither the key nor the token.",
+    "AC-5 test crates/setup/tests/app.rs:when_github_refuses_the_token_it_says_which_repos_to_choose_and_exits_non_zero: PASS. The partly failing run leaks nothing.",
+    "AC-5 e2e cargo fmt --all --check; cargo clippy --workspace --all-targets -- -D warnings; cargo test -p board-setup (all tests): fmt clean, clippy clean, app.rs 11/11 and cluster.rs 9/9 pass"
+  ]
+}
