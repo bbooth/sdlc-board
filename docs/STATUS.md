@@ -104,6 +104,8 @@
   `deploy/values.yaml`'s repos with the owner's `gh` token, and hands the
   key to the cluster step. `GITHUB_WEB`, `GITHUB_API`, `GH`,
   `BOARD_SETUP_OPEN` and `BOARD_VALUES` point it elsewhere for tests.
+  TRU-34 (agentic-sdlc#11): `onboard-project` adds a new repo to the
+  App's installation and opens the `deploy/values.yaml` PR here.
 
 ## Next
 

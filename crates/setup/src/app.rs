@@ -96,17 +96,28 @@ pub fn run(env: &Env, out: &mut impl Write) -> anyhow::Result<()> {
         .into();
     let (app, installation) = create_and_install(env, &agent, out)?;
     writeln!(out, "Created the GitHub App {} (ID {}), installed as {installation}.", app.slug, app.id)?;
-    match match_repos(env, &agent, installation, &repos, out) {
-        Ok(()) => writeln!(out, "The App is installed on exactly: {}.", repos.join(", "))?,
-        // The board still works for the repos that are on it; say what's left.
-        Err(e) => writeln!(
+    // The board still works for the repos it's on, so the cluster step runs
+    // either way; the run only counts as done with both.
+    let matched = match_repos(env, &agent, &app, installation, &repos, out);
+    if let Err(e) = &matched {
+        writeln!(
             out,
             "Couldn't set the App's repos ({e:#}). Choose \"Only select repositories\" and exactly {} at {}/settings/installations/{installation}.",
             repos.join(", "),
             env.web
-        )?,
+        )?;
     }
-    crate::install_key(&crate::Kubectl::from_env(&app.pem), &app.id.to_string(), &app.pem, out)
+    crate::install_key(&crate::Kubectl::from_env(&app.pem), &app.id.to_string(), &app.pem, out).with_context(|| {
+        format!(
+            "the App {} exists on GitHub but its key is gone with this run: delete it at {}/settings/apps/{} before running again",
+            app.slug, env.web, app.slug
+        )
+    })?;
+    match matched {
+        Ok(()) => writeln!(out, "The App is installed on exactly: {}.", repos.join(", "))?,
+        Err(_) => bail!("not finished: the App's repos still need setting, as above"),
+    }
+    Ok(())
 }
 
 /// Serves the manifest page on a local port, turns GitHub's code into the
@@ -125,7 +136,14 @@ fn create_and_install(env: &Env, agent: &ureq::Agent, out: &mut impl Write) -> a
     let mut app: Option<CreatedApp> = None;
     loop {
         if Instant::now() > deadline {
-            bail!("step: GitHub's pages (nothing came back in {} minutes)", BROWSER_WAIT.as_secs() / 60);
+            let left = match &app {
+                Some(a) => format!(
+                    "; the App {} was created but not installed: delete it at {}/settings/apps/{} before running again",
+                    a.slug, env.web, a.slug
+                ),
+                None => String::new(),
+            };
+            bail!("step: GitHub's pages (nothing came back in {} minutes){left}", BROWSER_WAIT.as_secs() / 60);
         }
         let mut stream = match listener.accept() {
             Ok((s, _)) => s,
@@ -136,7 +154,8 @@ fn create_and_install(env: &Env, agent: &ureq::Agent, out: &mut impl Write) -> a
             Err(e) => return Err(e.into()),
         };
         stream.set_nonblocking(false)?;
-        stream.set_read_timeout(Some(CALL_TIMEOUT))?;
+        // Short, so an idle socket a browser opens early can't hold up the real request.
+        stream.set_read_timeout(Some(Duration::from_secs(2)))?;
         let (path, query) = match read_request(&mut stream) {
             Ok(r) => r,
             Err(_) => continue,
@@ -152,7 +171,13 @@ fn create_and_install(env: &Env, agent: &ureq::Agent, out: &mut impl Write) -> a
                     continue;
                 }
                 let code = param(&query, "code").context("GitHub's redirect has no code")?;
-                let created = convert(env, agent, &code).context("step: create the App from GitHub's code")?;
+                let created = match convert(env, agent, &code) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        respond(&mut stream, 502, "GitHub didn't create the App: see the terminal.")?;
+                        return Err(e.context("step: create the App from GitHub's code"));
+                    }
+                };
                 redirect(&mut stream, &format!("{}/apps/{}/installations/new", env.web, created.slug))?;
                 app = Some(created);
             }
@@ -193,6 +218,7 @@ fn convert(env: &Env, agent: &ureq::Agent, code: &str) -> anyhow::Result<Created
 fn match_repos(
     env: &Env,
     agent: &ureq::Agent,
+    app: &CreatedApp,
     installation: u64,
     want: &[String],
     out: &mut impl Write,
@@ -213,6 +239,24 @@ fn match_repos(
         let body = resp.body_mut().read_to_vec()?;
         Ok(if body.is_empty() { Value::Null } else { serde_json::from_slice(&body)? })
     };
+    // The redirect carries no state, so check the installation is this App's
+    // before changing it, and that it's on chosen repos, not all of them.
+    let mut found = None;
+    for page in 1.. {
+        let body = call("GET", &format!("/user/installations?per_page=100&page={page}"))?;
+        let list = body["installations"].as_array().cloned().unwrap_or_default();
+        found = found.or_else(|| list.iter().find(|i| i["id"].as_u64() == Some(installation)).cloned());
+        if list.len() < 100 {
+            break;
+        }
+    }
+    let found = found.with_context(|| format!("installation {installation} isn't one of yours"))?;
+    if found["app_id"].as_u64() != Some(app.id) {
+        bail!("installation {installation} belongs to another App, not {}", app.slug);
+    }
+    if found["repository_selection"] == "all" {
+        bail!("the App was installed on all repositories");
+    }
     let mut have: Vec<(u64, String)> = vec![];
     for page in 1.. {
         let body = call("GET", &format!("/user/installations/{installation}/repositories?per_page=100&page={page}"))?;

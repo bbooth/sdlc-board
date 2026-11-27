@@ -29,6 +29,8 @@ struct Rec {
     installed: Vec<(u64, String)>,
     changes: Vec<String>,
     bad_auth: usize,
+    /// What the install page reports: (installation id, its App, its selection).
+    installation: (u64, u64, &'static str),
 }
 
 type Shared = Arc<Mutex<Rec>>;
@@ -70,7 +72,20 @@ fn stub(rec: Shared) -> String {
             "/apps/{slug}/installations/new",
             get(|State(rec): State<Shared>| async move {
                 let setup = rec.lock().unwrap().manifest.as_ref().unwrap()["setup_url"].as_str().unwrap().to_string();
-                Redirect::to(&format!("{setup}?installation_id=77&setup_action=install"))
+                let id = rec.lock().unwrap().installation.0;
+                Redirect::to(&format!("{setup}?installation_id={id}&setup_action=install"))
+            }),
+        )
+        .route(
+            "/user/installations",
+            get(|State(rec): State<Shared>, headers: HeaderMap| async move {
+                if !authed(&rec, &headers) {
+                    return StatusCode::UNAUTHORIZED.into_response();
+                }
+                let (id, app_id, selection) = rec.lock().unwrap().installation;
+                let list = json!([{ "id": 5, "app_id": 1, "repository_selection": "all" },
+                    { "id": id, "app_id": app_id, "repository_selection": selection }]);
+                Json(json!({ "total_count": 2, "installations": list })).into_response()
             }),
         )
         .route(
@@ -147,11 +162,18 @@ struct Run {
 /// Runs `board-setup app`; `browse` plays the owner's browser from the URL
 /// the setup opened.
 fn run(installed: &[(u64, &str)], keys: &str, browse: impl FnOnce(&str, &str, &Shared)) -> Run {
-    run_with(installed, keys, false, browse)
+    run_with(installed, keys, false, (77, 4242, "selected"), browse)
 }
 
-fn run_with(installed: &[(u64, &str)], keys: &str, gh_fails: bool, browse: impl FnOnce(&str, &str, &Shared)) -> Run {
+fn run_with(
+    installed: &[(u64, &str)],
+    keys: &str,
+    gh_fails: bool,
+    installation: (u64, u64, &'static str),
+    browse: impl FnOnce(&str, &str, &Shared),
+) -> Run {
     let rec: Shared = Arc::default();
+    rec.lock().unwrap().installation = installation;
     rec.lock().unwrap().installed = installed.iter().map(|(i, n)| (*i, n.to_string())).collect();
     let web = stub(rec.clone());
     let dir = tempfile::tempdir().unwrap();
@@ -348,12 +370,38 @@ fn reads_the_boards_repos_from_the_charts_values() {
 }
 
 #[test]
-fn without_a_gh_sign_in_it_says_which_repos_to_choose_and_still_sets_up_the_cluster() {
-    let r = run_with(&[(1, "bbooth/booking")], "LINEAR_API_KEY\n", true, |url, _, _| confirm_on_github(url));
-    assert_eq!(r.code, 0, "{}", r.out);
+fn without_a_gh_sign_in_it_says_which_repos_to_choose_and_exits_non_zero() {
+    let r = run_with(&[(1, "bbooth/booking")], "LINEAR_API_KEY\n", true, (77, 4242, "selected"), |url, _, _| {
+        confirm_on_github(url)
+    });
+    // Not done until the repos are set, though the cluster step ran.
+    assert_ne!(r.code, 0, "{}", r.out);
+    assert!(r.out.contains("not finished"), "{}", r.out);
     assert!(r.out.contains("/settings/installations/77") && r.out.contains("bbooth/sdlc-board"), "{}", r.out);
     assert!(r.out.contains("gh auth login"), "{}", r.out);
     assert!(r.rec.lock().unwrap().changes.is_empty());
     assert!(r.out.contains("Done: the board reads GitHub as App 4242"), "{}", r.out);
     assert_no_leak(&r);
+}
+
+/// Both end like a failed gh sign-in: nothing changed on GitHub, the repos
+/// to choose named, a non-zero exit.
+fn assert_installation_refused(installation: (u64, u64, &'static str), why: &str) {
+    let r =
+        run_with(&[(1, "bbooth/booking")], "LINEAR_API_KEY\n", false, installation, |url, _, _| confirm_on_github(url));
+    assert_ne!(r.code, 0, "{}", r.out);
+    assert!(r.out.contains(why), "{}", r.out);
+    assert!(r.rec.lock().unwrap().changes.is_empty(), "changed an installation it shouldn't");
+    assert_no_leak(&r);
+}
+
+#[test]
+fn an_installation_of_another_app_is_left_alone() {
+    // A request to the setup's port that isn't GitHub's, naming installation 5.
+    assert_installation_refused((5, 1, "all"), "belongs to another App");
+}
+
+#[test]
+fn an_install_on_all_repositories_is_called_out() {
+    assert_installation_refused((77, 4242, "all"), "installed on all repositories");
 }
