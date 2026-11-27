@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-30",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-27T00:31:13.210Z",
+  "inputs": {
+    "branch": "feat/tru-30-settings-reads",
+    "commit": "82afee7"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-30-settings-reads"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "17 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "4 test files changed with 8 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "480 lines changed, counting 215 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at 82afee7"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "commands:android",
+      "pass": true,
+      "detail": "cargo build -p board-ffi && ../gradlew test"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "6 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "file": "android/app/src/main/kotlin/com/trulinc/board/MainActivity.kt",
+      "summary": "enableEdgeToEdge's default SystemBarStyle.auto follows the phone's dark mode, so the icons stayed white on the always-light app",
+      "fix": "enableEdgeToEdge with SystemBarStyle.light for both bars"
+    },
+    {
+      "severity": "blocking",
+      "status": "fixed",
+      "file": "android/app/src/test/kotlin/SettingsTest.kt",
+      "summary": "The noBackupFilesDir assertion was tautological, and nothing tested MainActivity's choices: the file's place, first start opening the settings, Settings changing them",
+      "fix": "New AppTest launches MainActivity: a fresh install shows the settings with no Cancel, Save writes settings.json under noBackupFilesDir, and Settings shows the saved values and Cancel returns to the board; the tautology is removed"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": "android/app/src/main/kotlin/com/trulinc/board/Screens.kt",
+      "summary": "The secret was held in rememberSaveable, so it went into the saved-instance-state Bundle",
+      "fix": "The secret field uses remember"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": "crates/core/src/settings.rs",
+      "summary": "local() ignored userinfo, so http://localhost:x@board.example/ counted as this device",
+      "fix": "An authority with '@' is never local; a test case covers it"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": "android/app/src/main/kotlin/com/trulinc/board/MainActivity.kt",
+      "summary": "The tick loop kept reading while the app was in the background",
+      "fix": "The loop runs under repeatOnLifecycle(STARTED)"
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "file": "android/app/src/main/kotlin/com/trulinc/board/Screens.kt",
+      "summary": "Kotlin rewrote the egui notice lines and hard-coded 30 s",
+      "fix": "words::couldnt_refresh and words::no_board (from REFRESH) word them for egui and, through View.problemLine and View.placeholder, for Android"
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}
