@@ -31,6 +31,12 @@ struct Rec {
     bad_auth: usize,
     /// What the install page reports: (installation id, its App, its selection).
     installation: (u64, u64, &'static str),
+    /// Who GitHub says owns the App it creates.
+    app_owner: String,
+    /// GitHub turns down the owner's token when changing an installation.
+    refuse_changes: bool,
+    /// The install page's first redirect names another App's installation (5).
+    forge_first: bool,
 }
 
 type Shared = Arc<Mutex<Rec>>;
@@ -65,15 +71,27 @@ fn stub(rec: Shared) -> String {
             post(|State(rec): State<Shared>, Path(code): Path<String>| async move {
                 assert_eq!(code, "abc123");
                 rec.lock().unwrap().conversions += 1;
-                Json(json!({ "id": 4242, "slug": "sdlc-board-test", "pem": KEY, "owner": { "login": "bbooth" } }))
+                let owner = rec.lock().unwrap().app_owner.clone();
+                Json(json!({ "id": 4242, "slug": "sdlc-board-test", "pem": KEY, "owner": { "login": owner } }))
             }),
         )
         .route(
             "/apps/{slug}/installations/new",
             get(|State(rec): State<Shared>| async move {
                 let setup = rec.lock().unwrap().manifest.as_ref().unwrap()["setup_url"].as_str().unwrap().to_string();
-                let id = rec.lock().unwrap().installation.0;
+
+                let mut r = rec.lock().unwrap();
+                let id = if std::mem::take(&mut r.forge_first) { 5 } else { r.installation.0 };
                 Redirect::to(&format!("{setup}?installation_id={id}&setup_action=install"))
+            }),
+        )
+        .route(
+            "/user",
+            get(|State(rec): State<Shared>, headers: HeaderMap| async move {
+                if !authed(&rec, &headers) {
+                    return StatusCode::UNAUTHORIZED.into_response();
+                }
+                Json(json!({ "login": "bbooth" })).into_response()
             }),
         )
         .route(
@@ -117,6 +135,9 @@ fn stub(rec: Shared) -> String {
                     return StatusCode::UNAUTHORIZED;
                 }
                 let mut r = rec.lock().unwrap();
+                if r.refuse_changes {
+                    return StatusCode::FORBIDDEN;
+                }
                 r.changes.push(format!("PUT {id}"));
                 r.installed.push((id, if id == 2 { "bbooth/sdlc-board" } else { "bbooth/booking" }.into()));
                 StatusCode::NO_CONTENT
@@ -126,6 +147,9 @@ fn stub(rec: Shared) -> String {
                     return StatusCode::UNAUTHORIZED;
                 }
                 let mut r = rec.lock().unwrap();
+                if r.refuse_changes {
+                    return StatusCode::FORBIDDEN;
+                }
                 r.changes.push(format!("DELETE {id}"));
                 r.installed.retain(|(i, _)| *i != id);
                 StatusCode::NO_CONTENT
@@ -172,8 +196,25 @@ fn run_with(
     installation: (u64, u64, &'static str),
     browse: impl FnOnce(&str, &str, &Shared),
 ) -> Run {
+    run_full(installed, keys, gh_fails, installation, "bbooth", false, browse)
+}
+
+fn run_full(
+    installed: &[(u64, &str)],
+    keys: &str,
+    gh_fails: bool,
+    installation: (u64, u64, &'static str),
+    app_owner: &str,
+    refuse_changes: bool,
+    browse: impl FnOnce(&str, &str, &Shared),
+) -> Run {
     let rec: Shared = Arc::default();
-    rec.lock().unwrap().installation = installation;
+    {
+        let mut r = rec.lock().unwrap();
+        r.installation = installation;
+        r.app_owner = app_owner.into();
+        r.refuse_changes = refuse_changes;
+    }
     rec.lock().unwrap().installed = installed.iter().map(|(i, n)| (*i, n.to_string())).collect();
     let web = stub(rec.clone());
     let dir = tempfile::tempdir().unwrap();
@@ -201,7 +242,7 @@ fn run_with(
         ),
     );
     let open = script(dir.path(), "open", &format!("#!/bin/bash\necho \"$1\" > {}\n", opened.display()));
-    let child = Command::new(env!("CARGO_BIN_EXE_board-setup"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_board-setup"))
         .arg("app")
         .current_dir(&work)
         .env("TMPDIR", &work)
@@ -220,8 +261,9 @@ fn run_with(
         .spawn()
         .unwrap();
     let start = Instant::now();
+    // Until the setup opens the browser, or ends without doing so.
     while !opened.exists() && start.elapsed() < Duration::from_secs(20) {
-        if keys.contains("GITHUB_APP_ID") {
+        if child.try_wait().unwrap().is_some() {
             break;
         }
         std::thread::sleep(Duration::from_millis(50));
@@ -370,18 +412,67 @@ fn reads_the_boards_repos_from_the_charts_values() {
 }
 
 #[test]
-fn without_a_gh_sign_in_it_says_which_repos_to_choose_and_exits_non_zero() {
-    let r = run_with(&[(1, "bbooth/booking")], "LINEAR_API_KEY\n", true, (77, 4242, "selected"), |url, _, _| {
-        confirm_on_github(url)
+fn without_a_gh_sign_in_it_stops_before_making_an_app() {
+    let r = run_with(&[(1, "bbooth/booking")], "LINEAR_API_KEY\n", true, (77, 4242, "selected"), |_, _, _| {
+        panic!("the browser was opened")
     });
+    assert_ne!(r.code, 0, "{}", r.out);
+    assert!(r.out.contains("gh auth login"), "{}", r.out);
+    assert!(r.rec.lock().unwrap().manifest.is_none());
+}
+
+#[test]
+fn when_github_refuses_the_token_it_says_which_repos_to_choose_and_exits_non_zero() {
+    let r = run_full(
+        &[(1, "bbooth/booking")],
+        "LINEAR_API_KEY\n",
+        false,
+        (77, 4242, "selected"),
+        "bbooth",
+        true,
+        |url, _, _| confirm_on_github(url),
+    );
     // Not done until the repos are set, though the cluster step ran.
     assert_ne!(r.code, 0, "{}", r.out);
     assert!(r.out.contains("not finished"), "{}", r.out);
     assert!(r.out.contains("/settings/installations/77") && r.out.contains("bbooth/sdlc-board"), "{}", r.out);
-    assert!(r.out.contains("gh auth login"), "{}", r.out);
-    assert!(r.rec.lock().unwrap().changes.is_empty());
     assert!(r.out.contains("Done: the board reads GitHub as App 4242"), "{}", r.out);
     assert_no_leak(&r);
+}
+
+#[test]
+fn an_app_owned_by_someone_else_is_not_used() {
+    // A code from someone else's App, slipped in through the setup's redirect.
+    let r = run_full(
+        &[(1, "bbooth/booking")],
+        "LINEAR_API_KEY\n",
+        false,
+        (77, 4242, "selected"),
+        "mallory",
+        false,
+        |url, _, _| {
+            let page = browser().get(url).call().unwrap().body_mut().read_to_string().unwrap();
+            assert!(page.contains("manifest"));
+            let base = url.trim_end_matches('/');
+            let state = page.split("state=").nth(1).unwrap().split('"').next().unwrap().to_string();
+            let _ = browser().get(format!("{base}/created?code=abc123&state={state}")).call();
+        },
+    );
+    assert_ne!(r.code, 0, "{}", r.out);
+    assert!(r.out.contains("belongs to \"mallory\""), "{}", r.out);
+    assert!(!r.args.contains("patch"), "the cluster was changed");
+    assert_no_leak(&r);
+}
+
+#[test]
+fn a_request_not_addressed_to_the_setup_gets_nothing() {
+    let r = run(&[(1, "bbooth/booking"), (2, "bbooth/sdlc-board")], "LINEAR_API_KEY\n", |url, _, _| {
+        // What a page that rebinds evil.example to 127.0.0.1 would send.
+        let resp = browser().get(url).header("Host", "evil.example").call().unwrap();
+        assert_eq!(resp.status(), 403);
+        confirm_on_github(url);
+    });
+    assert_eq!(r.code, 0, "{}", r.out);
 }
 
 /// Both end like a failed gh sign-in: nothing changed on GitHub, the repos
@@ -396,9 +487,27 @@ fn assert_installation_refused(installation: (u64, u64, &'static str), why: &str
 }
 
 #[test]
-fn an_installation_of_another_app_is_left_alone() {
-    // A request to the setup's port that isn't GitHub's, naming installation 5.
-    assert_installation_refused((5, 1, "all"), "belongs to another App");
+fn a_redirect_naming_another_apps_installation_does_not_end_the_wait() {
+    let r = run(&[(1, "bbooth/booking")], "LINEAR_API_KEY\n", |url, web, rec| {
+        rec.lock().unwrap().forge_first = true;
+        let b = browser();
+        let page = b.get(url).call().unwrap().body_mut().read_to_string().unwrap();
+        let at = page.find("value=\"").unwrap() + 7;
+        let manifest = page[at..at + page[at..].find('"').unwrap()].replace("&quot;", "\"").replace("&amp;", "&");
+        let action = format!(
+            "{web}/settings/apps/new?state={}",
+            page.split("state=").nth(1).unwrap().split('"').next().unwrap()
+        );
+        let resp = b.post(&action).send_form([("manifest", manifest.as_str())]).unwrap();
+        assert_eq!(resp.status(), 400, "installation 5 was taken as this App's");
+        // The real redirect still gets through.
+        let resp = b.get(format!("{web}/apps/sdlc-board-test/installations/new")).call().unwrap();
+        assert_eq!(resp.status(), 200);
+    });
+    assert_eq!(r.code, 0, "{}", r.out);
+    assert!(r.out.contains("Ignored a redirect naming installation 5"), "{}", r.out);
+    assert_eq!(r.rec.lock().unwrap().changes, ["PUT 2"]);
+    assert_no_leak(&r);
 }
 
 #[test]

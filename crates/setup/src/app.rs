@@ -94,11 +94,18 @@ pub fn run(env: &Env, out: &mut impl Write) -> anyhow::Result<()> {
         .user_agent("board-setup")
         .build()
         .into();
-    let (app, installation) = create_and_install(env, &agent, out)?;
+    // Before any App exists: the new App's owner is checked against it, and
+    // it picks the installation's repos.
+    let token = gh_token(env)?;
+    let login = github(env, &agent, &token, "GET", "/user")?["login"]
+        .as_str()
+        .context("GET /user: no login in GitHub's answer")?
+        .to_string();
+    let (app, installation) = create_and_install(env, &agent, &token, &login, out)?;
     writeln!(out, "Created the GitHub App {} (ID {}), installed as {installation}.", app.slug, app.id)?;
     // The board still works for the repos it's on, so the cluster step runs
     // either way; the run only counts as done with both.
-    let matched = match_repos(env, &agent, &app, installation, &repos, out);
+    let matched = match_repos(env, &agent, &token, &app, installation, &repos, out);
     if let Err(e) = &matched {
         writeln!(
             out,
@@ -122,9 +129,16 @@ pub fn run(env: &Env, out: &mut impl Write) -> anyhow::Result<()> {
 
 /// Serves the manifest page on a local port, turns GitHub's code into the
 /// App, sends the browser on to the install page and waits for its redirect.
-fn create_and_install(env: &Env, agent: &ureq::Agent, out: &mut impl Write) -> anyhow::Result<(CreatedApp, u64)> {
+fn create_and_install(
+    env: &Env,
+    agent: &ureq::Agent,
+    token: &str,
+    login: &str,
+    out: &mut impl Write,
+) -> anyhow::Result<(CreatedApp, u64)> {
     let listener = TcpListener::bind("127.0.0.1:0").context("can't listen on 127.0.0.1")?;
-    let base = format!("http://{}", listener.local_addr()?);
+    let host = listener.local_addr()?.to_string();
+    let base = format!("http://{host}");
     let state = random_hex()?;
     let name = format!("sdlc-board-{}", &state[..6]);
     let manifest = manifest(&name, &format!("{base}/created"), &format!("{base}/installed"));
@@ -156,10 +170,16 @@ fn create_and_install(env: &Env, agent: &ureq::Agent, out: &mut impl Write) -> a
         stream.set_nonblocking(false)?;
         // Short, so an idle socket a browser opens early can't hold up the real request.
         stream.set_read_timeout(Some(Duration::from_secs(2)))?;
-        let (path, query) = match read_request(&mut stream) {
+        let (path, query, req_host) = match read_request(&mut stream) {
             Ok(r) => r,
             Err(_) => continue,
         };
+        // A page that rebinds its own name to 127.0.0.1 still sends its name
+        // as the Host, so only requests addressed to this port get answers.
+        if req_host != host {
+            respond(&mut stream, 403, "Not addressed to the setup.")?;
+            continue;
+        }
         match (path.as_str(), &app) {
             ("/", None) => {
                 let action = format!("{}/settings/apps/new?state={state}", env.web);
@@ -171,7 +191,7 @@ fn create_and_install(env: &Env, agent: &ureq::Agent, out: &mut impl Write) -> a
                     continue;
                 }
                 let code = param(&query, "code").context("GitHub's redirect has no code")?;
-                let created = match convert(env, agent, &code) {
+                let created = match convert(env, agent, &code, login) {
                     Ok(c) => c,
                     Err(e) => {
                         respond(&mut stream, 502, "GitHub didn't create the App: see the terminal.")?;
@@ -181,11 +201,18 @@ fn create_and_install(env: &Env, agent: &ureq::Agent, out: &mut impl Write) -> a
                 redirect(&mut stream, &format!("{}/apps/{}/installations/new", env.web, created.slug))?;
                 app = Some(created);
             }
-            ("/installed", Some(_)) => {
+            ("/installed", Some(created)) => {
                 let Some(id) = param(&query, "installation_id").and_then(|i| i.parse().ok()) else {
                     respond(&mut stream, 400, "GitHub's redirect has no installation_id.")?;
                     continue;
                 };
+                // The redirect carries no state: a stray request naming another
+                // installation mustn't end the wait for the real one.
+                if let Err(e) = own_installation(env, agent, token, created, id) {
+                    respond(&mut stream, 400, "That isn't this App's installation.")?;
+                    writeln!(out, "Ignored a redirect naming installation {id}: {e:#}")?;
+                    continue;
+                }
                 respond(&mut stream, 200, "Installed. You can close this tab and go back to the terminal.")?;
                 return Ok((app.take().expect("matched Some"), id));
             }
@@ -195,7 +222,7 @@ fn create_and_install(env: &Env, agent: &ureq::Agent, out: &mut impl Write) -> a
 }
 
 /// `POST /app-manifests/{code}/conversions`: the App's ID, slug and key.
-fn convert(env: &Env, agent: &ureq::Agent, code: &str) -> anyhow::Result<CreatedApp> {
+fn convert(env: &Env, agent: &ureq::Agent, code: &str, login: &str) -> anyhow::Result<CreatedApp> {
     if !code.chars().all(|c| c.is_ascii_alphanumeric()) {
         bail!("GitHub's code isn't alphanumeric");
     }
@@ -209,6 +236,11 @@ fn convert(env: &Env, agent: &ureq::Agent, code: &str) -> anyhow::Result<Created
     let body: Value = serde_json::from_slice(&resp.body_mut().read_to_vec()?)?;
     let id = body["id"].as_u64().context("no App id in GitHub's answer")?;
     let slug = body["slug"].as_str().context("no App slug in GitHub's answer")?.to_string();
+    // Someone else's code would hand the board an App they control.
+    let owner = body["owner"]["login"].as_str().unwrap_or_default();
+    if !owner.eq_ignore_ascii_case(login) {
+        bail!("the App {slug} belongs to {owner:?}, not to you ({login}): not using it");
+    }
     let pem = body["pem"].as_str().context("no key in GitHub's answer")?.to_string();
     Ok(CreatedApp { id, slug, pem })
 }
@@ -218,42 +250,14 @@ fn convert(env: &Env, agent: &ureq::Agent, code: &str) -> anyhow::Result<Created
 fn match_repos(
     env: &Env,
     agent: &ureq::Agent,
+    token: &str,
     app: &CreatedApp,
     installation: u64,
     want: &[String],
     out: &mut impl Write,
 ) -> anyhow::Result<()> {
-    let token = gh_token(env)?;
-    let call = |method: &str, path: &str| -> anyhow::Result<Value> {
-        let url = format!("{}{path}", env.api);
-        let req = ureq::http::Request::builder()
-            .method(method)
-            .uri(&url)
-            .header("Accept", "application/vnd.github+json")
-            .header("Authorization", format!("Bearer {token}"))
-            .body(())?;
-        let mut resp = agent.run(req)?;
-        if !resp.status().is_success() {
-            bail!("{method} {path}: GitHub answered {}", resp.status());
-        }
-        let body = resp.body_mut().read_to_vec()?;
-        Ok(if body.is_empty() { Value::Null } else { serde_json::from_slice(&body)? })
-    };
-    // The redirect carries no state, so check the installation is this App's
-    // before changing it, and that it's on chosen repos, not all of them.
-    let mut found = None;
-    for page in 1.. {
-        let body = call("GET", &format!("/user/installations?per_page=100&page={page}"))?;
-        let list = body["installations"].as_array().cloned().unwrap_or_default();
-        found = found.or_else(|| list.iter().find(|i| i["id"].as_u64() == Some(installation)).cloned());
-        if list.len() < 100 {
-            break;
-        }
-    }
-    let found = found.with_context(|| format!("installation {installation} isn't one of yours"))?;
-    if found["app_id"].as_u64() != Some(app.id) {
-        bail!("installation {installation} belongs to another App, not {}", app.slug);
-    }
+    let call = |method: &str, path: &str| github(env, agent, token, method, path);
+    let found = own_installation(env, agent, token, app, installation)?;
     if found["repository_selection"] == "all" {
         bail!("the App was installed on all repositories");
     }
@@ -278,6 +282,40 @@ fn match_repos(
     Ok(())
 }
 
+/// The owner's installation `id`, if it's this App's.
+fn own_installation(env: &Env, agent: &ureq::Agent, token: &str, app: &CreatedApp, id: u64) -> anyhow::Result<Value> {
+    let mut found = None;
+    for page in 1.. {
+        let body = github(env, agent, token, "GET", &format!("/user/installations?per_page=100&page={page}"))?;
+        let list = body["installations"].as_array().cloned().unwrap_or_default();
+        found = found.or_else(|| list.iter().find(|i| i["id"].as_u64() == Some(id)).cloned());
+        if list.len() < 100 {
+            break;
+        }
+    }
+    let found = found.with_context(|| format!("installation {id} isn't one of yours"))?;
+    if found["app_id"].as_u64() != Some(app.id) {
+        bail!("installation {id} belongs to another App, not {}", app.slug);
+    }
+    Ok(found)
+}
+
+/// One call to GitHub's API as the owner; `Null` for an empty answer.
+fn github(env: &Env, agent: &ureq::Agent, token: &str, method: &str, path: &str) -> anyhow::Result<Value> {
+    let req = ureq::http::Request::builder()
+        .method(method)
+        .uri(format!("{}{path}", env.api))
+        .header("Accept", "application/vnd.github+json")
+        .header("Authorization", format!("Bearer {token}"))
+        .body(())?;
+    let mut resp = agent.run(req)?;
+    if !resp.status().is_success() {
+        bail!("{method} {path}: GitHub answered {}", resp.status());
+    }
+    let body = resp.body_mut().read_to_vec()?;
+    Ok(if body.is_empty() { Value::Null } else { serde_json::from_slice(&body)? })
+}
+
 fn gh_token(env: &Env) -> anyhow::Result<String> {
     let out =
         Command::new(&env.gh).args(["auth", "token"]).output().with_context(|| format!("can't run {}", env.gh))?;
@@ -294,8 +332,8 @@ fn random_hex() -> anyhow::Result<String> {
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
-/// The request line's path and query; the rest of the request is ignored.
-fn read_request(stream: &mut TcpStream) -> anyhow::Result<(String, String)> {
+/// The request line's path and query, and the Host header.
+fn read_request(stream: &mut TcpStream) -> anyhow::Result<(String, String, String)> {
     let mut buf = vec![0u8; 8192];
     let mut len = 0;
     while !buf[..len].windows(4).any(|w| w == b"\r\n\r\n") && len < buf.len() {
@@ -308,7 +346,11 @@ fn read_request(stream: &mut TcpStream) -> anyhow::Result<(String, String)> {
     let head = String::from_utf8_lossy(&buf[..len]);
     let target = head.split_whitespace().nth(1).context("no request line")?;
     let (path, query) = target.split_once('?').unwrap_or((target, ""));
-    Ok((path.to_string(), query.to_string()))
+    let host = head
+        .lines()
+        .find_map(|l| l.split_once(':').filter(|(k, _)| k.eq_ignore_ascii_case("host")).map(|(_, v)| v.trim()))
+        .unwrap_or_default();
+    Ok((path.to_string(), query.to_string(), host.to_string()))
 }
 
 fn param(query: &str, name: &str) -> Option<String> {
