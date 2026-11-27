@@ -1,5 +1,8 @@
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -33,6 +36,8 @@ class AppTest {
         assertTrue(noBackup.readText().contains("https://board.example"))
         compose.onNodeWithText("Settings").performClick()
         compose.mainClock.advanceTimeBy(100)
+        val tree = compose.onRoot().printToString()
+        assertTrue("No address field after Settings:\n$tree", compose.onAllNodesWithTag("url").fetchSemanticsNodes().size == 1)
         compose.onNodeWithTag("url").assertTextContains("https://board.example")
         compose.onNodeWithText("Cancel").performClick()
         compose.mainClock.advanceTimeBy(100)
