@@ -22,7 +22,26 @@ are the native app's `BOARD_ACCESS_CLIENT_ID` and `BOARD_ACCESS_CLIENT_SECRET`.
 3. **The Application**, once the first image is pushed:
    `kubectl apply -f application.yaml`.
 4. **The GitHub App**, so the board can read private repos' checks
-   (fine-grained personal tokens can't):
+   (fine-grained personal tokens can't). From a checkout on Omarchy,
+   signed in to `gh` and with kubectl on the cluster
+   (`~/.kube/k3s-homelab.yaml`):
+
+   ```sh
+   cargo run -p board-setup
+   ```
+
+   It opens a local page that sends GitHub the App's settings (read-only
+   Checks, Contents, Metadata and Pull requests, no webhook, only this
+   account). Confirm **Create GitHub App**, then on the install page
+   choose **Only select repositories** and **Install**. It then makes the
+   installation cover exactly `deploy/values.yaml`'s `repos`, adding and
+   removing repos with your `gh` sign-in (if GitHub refuses, it says
+   which to choose on the App's settings page), and does step 4.4 itself.
+   The App's key never leaves memory. Once `sdlc-board-tokens` has
+   `GITHUB_APP_ID`, it changes nothing.
+
+   By hand instead:
+
    1. On GitHub, Settings > Developer settings > GitHub Apps > New GitHub
       App, under your own account. Any name and homepage URL. Untick
       **Webhook > Active**. Under **Repository permissions** set

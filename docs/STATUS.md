@@ -97,11 +97,17 @@
   as the App and then drops `GITHUB_TOKEN`; on a failure it takes the App
   back out. The key travels on kubectl's stdin only. A Secret that already
   has `GITHUB_APP_ID` is left alone. `KUBECTL` overrides the kubectl run.
+  TRU-35: `cargo run -p board-setup` creates the App first, through
+  GitHub's manifest flow (a local page on 127.0.0.1 posts the settings;
+  GitHub's redirect brings back the ID and key, then the install page's
+  redirect the installation), sets the installation to exactly
+  `deploy/values.yaml`'s repos with the owner's `gh` token, and hands the
+  key to the cluster step. `GITHUB_WEB`, `GITHUB_API`, `GH`,
+  `BOARD_SETUP_OPEN` and `BOARD_VALUES` point it elsewhere for tests.
 
 ## Next
 
 - TRU-13 (Android): TRU-30 (settings and reads), TRU-31 (the board
   screen).
-- TRU-32 (GitHub App setup): TRU-35 (create and install the App through
-  GitHub's manifest flow), TRU-34 (onboard-project adds new repos to the
-  App and `deploy/values.yaml`).
+- TRU-32 (GitHub App setup): the owner's first run of `board-setup`
+  (its Outcome, and TRU-19's).
