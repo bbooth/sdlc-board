@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "stage": "build",
+  "ticket": "TRU-35",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-27T18:37:51.379Z",
+  "inputs": {
+    "branch": "feat/tru-35-app-manifest",
+    "commit": "fcfdb7a"
+  },
+  "agent": {
+    "name": "check-build",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "branch",
+      "pass": true,
+      "detail": "feat/tru-35-app-manifest"
+    },
+    {
+      "name": "has_changes",
+      "pass": true,
+      "detail": "10 files changed"
+    },
+    {
+      "name": "tests_changed",
+      "pass": true,
+      "detail": "3 test files changed with 3 code files"
+    },
+    {
+      "name": "sql_has_store_test",
+      "pass": true,
+      "detail": "No SQL changed"
+    },
+    {
+      "name": "migrations_paired",
+      "pass": true,
+      "detail": "0 new migrations, each with its down"
+    },
+    {
+      "name": "status_updated",
+      "pass": true,
+      "detail": "docs/STATUS.md changed"
+    },
+    {
+      "name": "size",
+      "pass": true,
+      "detail": "649 lines changed, counting 441 test lines at half; size M allows 800"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at fcfdb7a"
+    },
+    {
+      "name": "commands:cargo",
+      "pass": true,
+      "detail": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "7 findings, none blocking and open"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/setup/src/app.rs:159: /installed accepts any installation_id without checking it belongs to the new App, so a stray request could point match_repos at another App's installation. Fixed: match_repos checks GET /user/installations lists it with this App's app_id; test an_installation_of_another_app_is_left_alone."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/setup/src/app.rs:99-108: a failed repo match still exits 0 with 'Done'. Fixed: the cluster step still runs, then the run exits non-zero with 'not finished'; test without_a_gh_sign_in_it_says_which_repos_to_choose_and_exits_non_zero."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/setup/src/app.rs:216: repository_selection isn't read, so an install on all repositories isn't called out. Fixed: 'all' is refused with a message naming the repos to choose; test an_install_on_all_repositories_is_called_out."
+    },
+    {
+      "severity": "minor",
+      "status": "open",
+      "summary": "crates/setup/src/app.rs:227: GitHub documents PUT/DELETE /user/installations/{id}/repositories/{repo_id} for classic PATs with repo scope; whether gh's OAuth token is accepted can't be shown with the stub. Left for Outcome; the fallback names the repos to choose. Noted in the PR as unverified."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/setup/src/app.rs:127-128,155: a run that stops after the conversion leaves an App on GitHub without saying so. Fixed: the timeout and the cluster-step errors name the App and where to delete it; a failed conversion answers the browser with a page."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "crates/setup/src/app.rs:138-143: a 30s blocking read lets an idle preconnect socket hold up the real request. Fixed: a 2 second read timeout per connection."
+    },
+    {
+      "severity": "minor",
+      "status": "fixed",
+      "summary": "docs/STATUS.md:112: Next drops TRU-34 without recording it. TRU-34 merged as agentic-sdlc#11; STATUS now records it as shipped."
+    }
+  ],
+  "decision": "Advance to Verify",
+  "evidence": []
+}

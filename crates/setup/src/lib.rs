@@ -7,6 +7,8 @@ use board_server::github_app::Settings;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
+pub mod app;
+
 pub const NAMESPACE: &str = "sdlc-board";
 pub const SECRET: &str = "sdlc-board-tokens";
 pub const DEPLOYMENT: &str = "sdlc-board";
@@ -84,13 +86,7 @@ impl Kubectl {
 pub fn install_key(kube: &Kubectl, app_id: &str, pem: &str, out: &mut impl Write) -> anyhow::Result<()> {
     // First, so a second run needs no key and still says what to do.
     let keys = kube.secret_keys().context("step: read the Secret's keys")?;
-    if keys.iter().any(|k| k == "GITHUB_APP_ID") {
-        writeln!(
-            out,
-            "The GitHub App is already set up: {SECRET} has GITHUB_APP_ID. Nothing changed.\n\
-             To replace it on purpose, remove GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY first \
-             (argocd/README.md, \"To back out\"), then run this again."
-        )?;
+    if already_set_up(&keys, out)? {
         return Ok(());
     }
     // The server's own check, before anything changes on the cluster.
@@ -117,6 +113,26 @@ pub fn install_key(kube: &Kubectl, app_id: &str, pem: &str, out: &mut impl Write
     }
     writeln!(out, "Done: the board reads GitHub as App {}.", app_id.trim())?;
     Ok(())
+}
+
+/// True, having said so and how to replace it, when the Secret already has an App.
+fn already_set_up(keys: &[String], out: &mut impl Write) -> anyhow::Result<bool> {
+    if !keys.iter().any(|k| k == "GITHUB_APP_ID") {
+        return Ok(false);
+    }
+    writeln!(
+        out,
+        "The GitHub App is already set up: {SECRET} has GITHUB_APP_ID. Nothing changed.\n\
+         To replace it on purpose, remove GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY first \
+         (argocd/README.md, \"To back out\"), then run this again."
+    )?;
+    Ok(true)
+}
+
+/// The `app` command's first step: true when there's nothing to do.
+pub fn is_set_up(kube: &Kubectl, out: &mut impl Write) -> anyhow::Result<bool> {
+    let keys = kube.secret_keys().context("step: read the Secret's keys")?;
+    already_set_up(&keys, out)
 }
 
 fn check_sign_in(kube: &Kubectl) -> anyhow::Result<()> {

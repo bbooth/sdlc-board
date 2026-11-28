@@ -726,9 +726,12 @@ name = "board-setup"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "board-server",
  "serde_json",
  "tempfile",
+ "tokio",
+ "ureq",
 ]
 
 [[package]]

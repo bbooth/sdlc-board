@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "stage": "adversarial_review",
+  "ticket": "TRU-35",
+  "round": 1,
+  "result": "pass",
+  "recorded_at": "2026-11-27T18:53:02.262Z",
+  "inputs": {
+    "branch": "feat/tru-35-app-manifest",
+    "commit": "c9f43c6",
+    "verify_record": ".sdlc/records/TRU-35/verify-1.json"
+  },
+  "agent": {
+    "name": "check-review",
+    "kind": "deterministic"
+  },
+  "checks": [
+    {
+      "name": "verify_passed",
+      "pass": true,
+      "detail": ".sdlc/records/TRU-35/verify-1.json says pass at 9236ee9"
+    },
+    {
+      "name": "same_code",
+      "pass": true,
+      "detail": "Only records changed since 9236ee9"
+    },
+    {
+      "name": "committed",
+      "pass": true,
+      "detail": "Clean at c9f43c6"
+    },
+    {
+      "name": "reviewed_commit",
+      "pass": true,
+      "detail": "The reviewers read c9f43c6"
+    },
+    {
+      "name": "scopes_covered",
+      "pass": true,
+      "detail": "Reviewed for security"
+    },
+    {
+      "name": "findings_located",
+      "pass": true,
+      "detail": "3 findings, each at a file and line"
+    },
+    {
+      "name": "blocking_judged",
+      "pass": true,
+      "detail": "0 blocking findings, each judged"
+    },
+    {
+      "name": "no_blocking_findings",
+      "pass": true,
+      "detail": "0 blocking findings refuted, 3 minor carried to the PR"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "summary": "crates/setup/src/app.rs:298: the local listener never checks the Host header, so for the 15 minutes before the App is created, a DNS-rebinding page in the owner's browser that finds the ephemeral port can read `/` (which holds the `state`), then send the browser to `/created?state=<state>&code=<code from an App manifest the attacker made under their own account>`. convert() accepts the code, and the owner is sent to install the attacker's App. match_repos's app_id check passes, because it compares against that same converted App. To fix, check that Host is `127.0.0.1:<port>` and reject anything else.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/setup/src/app.rs:211: convert() reads id, slug and pem but never checks the App's `owner.login` against the `gh` user the run acts as. An App converted from someone else's manifest code (see the Host finding) is treated as the board's own, installed, and its key put in sdlc-board-tokens. Checking the owner before redirecting to the install page closes this whatever way the code arrives.",
+      "status": "open",
+      "scope": "security"
+    },
+    {
+      "severity": "minor",
+      "summary": "crates/setup/src/app.rs:184: `/installed` needs no state, so once the App exists, any local process or web page that hits `127.0.0.1:<port>/installed?installation_id=N` ends the browser wait with N. match_repos then rejects N because its app_id doesn't match, but the owner's real install redirect is never waited for: the run installs the key and exits non-zero. Only a disruption, since nothing is installed on the wrong App. Ignoring a mismatched installation_id and waiting on would avoid it.",
+      "status": "open",
+      "scope": "security"
+    }
+  ],
+  "decision": "Open the PR and advance to PR review",
+  "evidence": []
+}
